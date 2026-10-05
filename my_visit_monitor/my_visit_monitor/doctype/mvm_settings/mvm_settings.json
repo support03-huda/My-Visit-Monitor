@@ -1,0 +1,66 @@
+{
+ "actions": [],
+ "creation": "2026-10-05 12:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company_id",
+  "require_location",
+  "column_break_main",
+  "google_maps_api_key"
+ ],
+ "fields": [
+  {
+   "default": "01",
+   "description": "Two-character company code used in visit numbers: YY + Company ID + 6-digit running number.",
+   "fieldname": "company_id",
+   "fieldtype": "Data",
+   "label": "Company ID",
+   "length": 2
+  },
+  {
+   "default": "1",
+   "description": "Block check-in and check-out when the browser location is not available.",
+   "fieldname": "require_location",
+   "fieldtype": "Check",
+   "label": "Require Location for Check In / Check Out"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Used to look up the customer's address coordinates at check-in. Leave empty to skip the lookup.",
+   "fieldname": "google_maps_api_key",
+   "fieldtype": "Password",
+   "label": "Google Maps API Key"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-05 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "My Visit Monitor",
+ "name": "MVM Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "MVM Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,20 @@
+{
+ "app": "my_visit_monitor",
+ "creation": "2026-10-05 14:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon": "map-pin",
+ "icon_type": "Link",
+ "idx": 0,
+ "label": "My Visit Monitor",
+ "link_to": "My Visit Monitor",
+ "link_type": "Workspace Sidebar",
+ "modified": "2026-10-05 14:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "My Visit Monitor",
+ "owner": "Administrator",
+ "restrict_removal": 0,
+ "roles": [],
+ "standard": 1
+}

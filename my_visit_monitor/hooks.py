@@ -132,13 +132,15 @@ app_license = "mit"
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+	"MVM Customer": "my_visit_monitor.permission.customer_query_conditions",
+	"MVM Visit Entry": "my_visit_monitor.permission.visit_query_conditions",
+}
+
+has_permission = {
+	"MVM Customer": "my_visit_monitor.permission.customer_has_permission",
+	"MVM Visit Entry": "my_visit_monitor.permission.visit_has_permission",
+}
 
 # Document Events
 # ---------------

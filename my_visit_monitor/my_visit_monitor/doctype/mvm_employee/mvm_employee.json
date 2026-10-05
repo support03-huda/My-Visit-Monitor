@@ -1,0 +1,213 @@
+{
+ "actions": [],
+ "creation": "2026-10-05 12:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "employee_name",
+  "email",
+  "user",
+  "mobile",
+  "column_break_main",
+  "location",
+  "reporting_to",
+  "inactive",
+  "section_zones",
+  "zones",
+  "section_address",
+  "address_line_1",
+  "address_line_2",
+  "address_line_3",
+  "column_break_address",
+  "pincode",
+  "city",
+  "state",
+  "country",
+  "section_other",
+  "magic_code",
+  "payroll_magic_code",
+  "column_break_other",
+  "digipin"
+ ],
+ "fields": [
+  {
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Employee Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Email",
+   "options": "Email",
+   "reqd": 1
+  },
+  {
+   "description": "Login of this employee. Filled from Email when a user with that email exists.",
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "unique": 1
+  },
+  {
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "label": "Mobile"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Location",
+   "options": "MVM Location"
+  },
+  {
+   "fieldname": "reporting_to",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Reporting To",
+   "options": "MVM Employee"
+  },
+  {
+   "default": "0",
+   "fieldname": "inactive",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Inactive"
+  },
+  {
+   "description": "The employee can log visits for customers in these zones.",
+   "fieldname": "section_zones",
+   "fieldtype": "Section Break",
+   "label": "Zones"
+  },
+  {
+   "fieldname": "zones",
+   "fieldtype": "Table",
+   "label": "Zones",
+   "options": "MVM Employee Zone"
+  },
+  {
+   "fieldname": "section_address",
+   "fieldtype": "Section Break",
+   "label": "Address"
+  },
+  {
+   "fieldname": "address_line_1",
+   "fieldtype": "Data",
+   "label": "Address Line 1"
+  },
+  {
+   "fieldname": "address_line_2",
+   "fieldtype": "Data",
+   "label": "Address Line 2"
+  },
+  {
+   "fieldname": "address_line_3",
+   "fieldtype": "Data",
+   "label": "Address Line 3"
+  },
+  {
+   "fieldname": "column_break_address",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Pincode"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Data",
+   "label": "Country"
+  },
+  {
+   "fieldname": "section_other",
+   "fieldtype": "Section Break",
+   "label": "Other"
+  },
+  {
+   "fieldname": "magic_code",
+   "fieldtype": "Data",
+   "label": "Magic Code"
+  },
+  {
+   "fieldname": "payroll_magic_code",
+   "fieldtype": "Data",
+   "label": "Payroll Magic Code"
+  },
+  {
+   "fieldname": "column_break_other",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "digipin",
+   "fieldtype": "Data",
+   "label": "Digipin"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-05 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "My Visit Monitor",
+ "name": "MVM Employee",
+ "naming_rule": "By script",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "MVM Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "MVM User"
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "employee_name,email",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "employee_name",
+ "track_changes": 1
+}

@@ -1,0 +1,292 @@
+{
+ "actions": [],
+ "creation": "2026-10-05 12:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer",
+  "customer_name",
+  "visit_reason",
+  "description",
+  "column_break_main",
+  "employee",
+  "employee_name",
+  "status",
+  "next_visit_date",
+  "digipin",
+  "section_checkin",
+  "checkin_date",
+  "checkin_time",
+  "column_break_checkin",
+  "checkin_latitude",
+  "checkin_longitude",
+  "section_checkout",
+  "checkout_date",
+  "checkout_time",
+  "column_break_checkout",
+  "checkout_latitude",
+  "checkout_longitude",
+  "section_map",
+  "location_map",
+  "section_customer_location",
+  "customer_latitude",
+  "customer_longitude",
+  "column_break_customer_location",
+  "checkin_distance"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Customer",
+   "options": "MVM Customer",
+   "reqd": 1,
+   "search_index": 1,
+   "set_only_once": 1
+  },
+  {
+   "fetch_from": "customer.company_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "visit_reason",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Reason of Visit",
+   "options": "MVM Visit Reason",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Visit Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Employee",
+   "options": "MVM Employee",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "employee.employee_name",
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "label": "Employee Name",
+   "read_only": 1
+  },
+  {
+   "default": "Checked In",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Checked In\nChecked Out",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_visit_date",
+   "fieldtype": "Date",
+   "label": "Next Visit Date",
+   "no_copy": 1
+  },
+  {
+   "fieldname": "digipin",
+   "fieldtype": "Data",
+   "label": "Digipin"
+  },
+  {
+   "fieldname": "section_checkin",
+   "fieldtype": "Section Break",
+   "label": "Check In"
+  },
+  {
+   "fieldname": "checkin_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Check-in Date",
+   "no_copy": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "checkin_time",
+   "fieldtype": "Time",
+   "label": "Check-in Time",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_checkin",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "checkin_latitude",
+   "fieldtype": "Float",
+   "label": "Check-in Latitude",
+   "no_copy": 1,
+   "precision": "7",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checkin_longitude",
+   "fieldtype": "Float",
+   "label": "Check-in Longitude",
+   "no_copy": 1,
+   "precision": "7",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:!doc.__islocal",
+   "fieldname": "section_checkout",
+   "fieldtype": "Section Break",
+   "label": "Check Out"
+  },
+  {
+   "fieldname": "checkout_date",
+   "fieldtype": "Date",
+   "label": "Check-out Date",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "checkout_time",
+   "fieldtype": "Time",
+   "label": "Check-out Time",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_checkout",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "checkout_latitude",
+   "fieldtype": "Float",
+   "label": "Check-out Latitude",
+   "no_copy": 1,
+   "precision": "7",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checkout_longitude",
+   "fieldtype": "Float",
+   "label": "Check-out Longitude",
+   "no_copy": 1,
+   "precision": "7",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:!doc.__islocal",
+   "fieldname": "section_map",
+   "fieldtype": "Section Break",
+   "label": "Map"
+  },
+  {
+   "fieldname": "location_map",
+   "fieldtype": "HTML",
+   "label": "Location Map"
+  },
+  {
+   "depends_on": "eval:!doc.__islocal",
+   "description": "Looked up from the customer's address at check-in.",
+   "fieldname": "section_customer_location",
+   "fieldtype": "Section Break",
+   "label": "Customer Location"
+  },
+  {
+   "fieldname": "customer_latitude",
+   "fieldtype": "Float",
+   "label": "Customer Latitude",
+   "no_copy": 1,
+   "precision": "7",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer_longitude",
+   "fieldtype": "Float",
+   "label": "Customer Longitude",
+   "no_copy": 1,
+   "precision": "7",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_customer_location",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "checkin_distance",
+   "fieldtype": "Float",
+   "label": "Check-in Distance from Customer (m)",
+   "no_copy": 1,
+   "precision": "0",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-05 16:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "My Visit Monitor",
+ "name": "MVM Visit Entry",
+ "naming_rule": "By script",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "MVM Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "MVM User",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "customer_name,checkin_date,status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "customer_name",
+ "track_changes": 1
+}
