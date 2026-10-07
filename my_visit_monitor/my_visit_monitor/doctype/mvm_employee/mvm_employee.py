@@ -19,9 +19,6 @@ class MVMEmployee(Document):
 		if not self.user and self.email and frappe.db.exists("User", self.email):
 			self.user = self.email
 
-		if self.reporting_to and self.reporting_to == self.name:
-			frappe.throw(_("An employee cannot report to themselves."))
-
 		zones = [row.zone for row in self.zones]
 		if len(zones) != len(set(zones)):
 			frappe.throw(_("The same zone is listed more than once."))

@@ -26,13 +26,9 @@
   "column_break_checkout",
   "checkout_latitude",
   "checkout_longitude",
-  "section_map",
-  "location_map",
   "section_customer_location",
   "customer_latitude",
-  "customer_longitude",
-  "column_break_customer_location",
-  "checkin_distance"
+  "customer_longitude"
  ],
  "fields": [
   {
@@ -194,17 +190,6 @@
   },
   {
    "depends_on": "eval:!doc.__islocal",
-   "fieldname": "section_map",
-   "fieldtype": "Section Break",
-   "label": "Map"
-  },
-  {
-   "fieldname": "location_map",
-   "fieldtype": "HTML",
-   "label": "Location Map"
-  },
-  {
-   "depends_on": "eval:!doc.__islocal",
    "description": "Looked up from the customer's address at check-in.",
    "fieldname": "section_customer_location",
    "fieldtype": "Section Break",
@@ -225,22 +210,10 @@
    "no_copy": 1,
    "precision": "7",
    "read_only": 1
-  },
-  {
-   "fieldname": "column_break_customer_location",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "checkin_distance",
-   "fieldtype": "Float",
-   "label": "Check-in Distance from Customer (m)",
-   "no_copy": 1,
-   "precision": "0",
-   "read_only": 1
   }
  ],
  "links": [],
- "modified": "2026-10-05 16:00:00.000000",
+ "modified": "2026-10-07 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Visit Entry",

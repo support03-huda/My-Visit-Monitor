@@ -8,7 +8,6 @@ frappe.ui.form.on("MVM Visit Entry", {
 	},
 
 	refresh(frm) {
-		render_map(frm);
 		if (!frm.is_new() && !frm.doc.checkout_date && frm.perm[0].write) {
 			frm.add_custom_button(__("Check Out"), () => check_out(frm)).addClass("btn-primary");
 		}
@@ -28,76 +27,6 @@ frappe.ui.form.on("MVM Visit Entry", {
 			});
 	},
 });
-
-const CHECKIN_COLOR = "#2f9e44";
-const CHECKOUT_COLOR = "#e03131";
-
-// green dot where the employee checked in, red dot where they checked out
-function render_map(frm) {
-	const $wrapper = frm.get_field("location_map").$wrapper;
-	if (frm.mvm_map) {
-		frm.mvm_map.remove();
-		frm.mvm_map = null;
-	}
-
-	// check-out is drawn smaller and on top, so both stay visible when they are at the same spot
-	const points = [
-		{
-			label: __("Check In"),
-			color: CHECKIN_COLOR,
-			radius: 11,
-			lat: frm.doc.checkin_latitude,
-			lng: frm.doc.checkin_longitude,
-		},
-		{
-			label: __("Check Out"),
-			color: CHECKOUT_COLOR,
-			radius: 6,
-			lat: frm.doc.checkout_latitude,
-			lng: frm.doc.checkout_longitude,
-		},
-	].filter((point) => point.lat || point.lng);
-
-	if (frm.is_new() || !points.length) {
-		$wrapper.html(`<div class="text-muted">${__("No location was captured for this visit.")}</div>`);
-		return;
-	}
-
-	const legend = points
-		.map(
-			(point) =>
-				`<span style="margin-right: 16px; white-space: nowrap;">
-					<span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${point.color};"></span>
-					${point.label}: ${flt(point.lat, 6)}, ${flt(point.lng, 6)}
-				</span>`
-		)
-		.join("");
-	$wrapper.html(
-		`<div class="mvm-visit-map" style="height: 320px; border-radius: var(--border-radius); z-index: 0;"></div>
-		<div class="small text-muted" style="margin-top: 8px;">${legend}</div>`
-	);
-
-	const tile = frappe.utils.map_defaults.tiles.default_tile;
-	const map = (frm.mvm_map = L.map($wrapper.find(".mvm-visit-map").get(0)));
-	L.tileLayer(tile.url, tile.options).addTo(map);
-
-	points.forEach((point) => {
-		L.circleMarker([point.lat, point.lng], {
-			radius: point.radius,
-			color: "#ffffff",
-			weight: 2,
-			fillColor: point.color,
-			fillOpacity: 1,
-		})
-			.addTo(map)
-			.bindTooltip(point.label);
-	});
-
-	const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng]));
-	map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
-	// the section may still be laying out when the map is created
-	setTimeout(() => frm.mvm_map === map && map.invalidateSize(), 300);
-}
 
 function check_out(frm) {
 	get_position()

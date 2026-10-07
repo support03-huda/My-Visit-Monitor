@@ -83,7 +83,7 @@ def make():
 				{"email": email},
 				employee_name=name,
 				mobile=mobile,
-				location=locations[location],
+				location=location.replace(" Office", ""),
 				reporting_to=employees[0] if employees else None,
 				city=location.replace(" Office", ""),
 				country="India",

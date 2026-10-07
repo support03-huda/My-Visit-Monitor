@@ -1,4 +1,3 @@
-import math
 import re
 
 import frappe
@@ -10,6 +9,12 @@ CODE_DIGITS = 5
 
 def get_settings():
 	return frappe.get_cached_doc("MVM Settings")
+
+
+# A setting added after the settings were last saved reads as None, not as its default.
+def location_required():
+	value = get_settings().require_location
+	return True if value is None else bool(cint(value))
 
 
 def code_letter(text):
@@ -45,13 +50,6 @@ def validate_code_letter(doc, fieldname):
 
 def has_coordinates(latitude, longitude):
 	return bool(flt(latitude) or flt(longitude))
-
-
-def distance_in_metres(lat1, lon1, lat2, lon2):
-	"""Great-circle distance between two points."""
-	lat1, lon1, lat2, lon2 = (math.radians(flt(v)) for v in (lat1, lon1, lat2, lon2))
-	a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
-	return 6371000 * 2 * math.asin(math.sqrt(a))
 
 
 def geocode_address(address):

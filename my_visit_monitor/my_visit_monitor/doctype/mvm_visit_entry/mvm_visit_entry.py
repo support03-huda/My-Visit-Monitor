@@ -8,7 +8,7 @@ from frappe.model.naming import getseries
 from frappe.utils import add_days, cint, cstr, nowtime, today
 
 from my_visit_monitor.permission import get_current_employee, get_employee_zones, is_manager
-from my_visit_monitor.utils import distance_in_metres, geocode_address, get_settings, has_coordinates
+from my_visit_monitor.utils import geocode_address, get_settings, has_coordinates, location_required
 
 
 class MVMVisitEntry(Document):
@@ -51,7 +51,7 @@ class MVMVisitEntry(Document):
 			frappe.throw(_("Customer {0} is not in one of your zones.").format(self.customer))
 
 	def validate_location(self, latitude, longitude):
-		if cint(get_settings().require_location) and not has_coordinates(latitude, longitude):
+		if location_required() and not has_coordinates(latitude, longitude):
 			frappe.throw(
 				_("Your location could not be captured. Allow location access in the browser and try again.")
 			)
@@ -63,13 +63,8 @@ class MVMVisitEntry(Document):
 			["customer_name", "company_name", "address_line_1", "address_line_2", "address_line_3", "city", "pincode", "state", "country"],
 		)
 		location = geocode_address(", ".join(cstr(part) for part in customer if part))
-		if not location:
-			return
-		self.customer_latitude, self.customer_longitude = location
-		if has_coordinates(self.checkin_latitude, self.checkin_longitude):
-			self.checkin_distance = distance_in_metres(
-				self.checkin_latitude, self.checkin_longitude, self.customer_latitude, self.customer_longitude
-			)
+		if location:
+			self.customer_latitude, self.customer_longitude = location
 
 	def set_next_visit_date(self):
 		days = cint(frappe.db.get_value("MVM Customer", self.customer, "next_followup_days"))
