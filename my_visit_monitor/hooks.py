@@ -1,3 +1,8 @@
+# File: hooks.py
+# Purpose: Frappe hooks of the app. Only the permission hooks are in use.
+# Created: 2026-10-05
+# Last updated: 2026-10-07
+
 app_name = "my_visit_monitor"
 app_title = "My Visit Monitor"
 app_publisher = "huda"
@@ -132,11 +137,13 @@ app_license = "mit"
 # -----------
 # Permissions evaluated in scripted ways
 
+# Limits the customer and visit lists to the records of the logged-in employee.
 permission_query_conditions = {
 	"MVM Customer": "my_visit_monitor.permission.customer_query_conditions",
 	"MVM Visit Entry": "my_visit_monitor.permission.visit_query_conditions",
 }
 
+# The same limits when a single customer or visit is opened.
 has_permission = {
 	"MVM Customer": "my_visit_monitor.permission.customer_has_permission",
 	"MVM Visit Entry": "my_visit_monitor.permission.visit_has_permission",
