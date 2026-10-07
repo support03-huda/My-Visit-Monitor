@@ -6,6 +6,7 @@
  "field_order": [
   "company_id",
   "require_location",
+  "geofence_radius",
   "column_break_main",
   "google_maps_api_key"
  ],
@@ -26,6 +27,14 @@
    "label": "Require Location for Check In / Check Out"
   },
   {
+   "default": "50",
+   "description": "A check-in farther than this from the customer's location is saved with a warning. 0 switches the comparison off.",
+   "fieldname": "geofence_radius",
+   "fieldtype": "Int",
+   "label": "Geofence Radius (m)",
+   "non_negative": 1
+  },
+  {
    "fieldname": "column_break_main",
    "fieldtype": "Column Break"
   },
@@ -38,7 +47,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-07 15:00:00.000000",
+ "modified": "2026-10-07 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Settings",

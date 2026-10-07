@@ -1,3 +1,4 @@
+import math
 import re
 
 import frappe
@@ -5,6 +6,7 @@ from frappe import _
 from frappe.utils import cint, flt
 
 CODE_DIGITS = 5
+DEFAULT_GEOFENCE_RADIUS = 50
 
 
 def get_settings():
@@ -15,6 +17,12 @@ def get_settings():
 def location_required():
 	value = get_settings().require_location
 	return True if value is None else bool(cint(value))
+
+
+def geofence_radius():
+	"""Metres from the customer's location within which a check-in counts as at the customer; 0 is off."""
+	value = get_settings().geofence_radius
+	return DEFAULT_GEOFENCE_RADIUS if value is None else cint(value)
 
 
 def code_letter(text):
@@ -50,6 +58,13 @@ def validate_code_letter(doc, fieldname):
 
 def has_coordinates(latitude, longitude):
 	return bool(flt(latitude) or flt(longitude))
+
+
+def distance_in_metres(lat1, lon1, lat2, lon2):
+	"""Great-circle distance between two points."""
+	lat1, lon1, lat2, lon2 = (math.radians(flt(v)) for v in (lat1, lon1, lat2, lon2))
+	a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+	return 6371000 * 2 * math.asin(math.sqrt(a))
 
 
 def geocode_address(address):

@@ -23,6 +23,10 @@
   "city",
   "state",
   "country",
+  "section_location",
+  "latitude",
+  "column_break_location",
+  "longitude",
   "section_other",
   "magic_code",
   "column_break_other",
@@ -147,6 +151,28 @@
    "reqd": 1
   },
   {
+   "description": "The check-in location of a visit is compared with this point. When empty, the address is looked up instead.",
+   "fieldname": "section_location",
+   "fieldtype": "Section Break",
+   "label": "Customer Location"
+  },
+  {
+   "fieldname": "latitude",
+   "fieldtype": "Float",
+   "label": "Latitude",
+   "precision": "7"
+  },
+  {
+   "fieldname": "column_break_location",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "longitude",
+   "fieldtype": "Float",
+   "label": "Longitude",
+   "precision": "7"
+  },
+  {
    "fieldname": "section_other",
    "fieldtype": "Section Break",
    "label": "Other"
@@ -169,7 +195,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-07 15:00:00.000000",
+ "modified": "2026-10-07 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Customer",

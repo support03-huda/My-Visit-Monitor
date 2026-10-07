@@ -8,7 +8,14 @@ from frappe.model.naming import getseries
 from frappe.utils import add_days, cint, cstr, nowtime, today
 
 from my_visit_monitor.permission import get_current_employee, get_employee_zones, is_manager
-from my_visit_monitor.utils import geocode_address, get_settings, has_coordinates, location_required
+from my_visit_monitor.utils import (
+	distance_in_metres,
+	geocode_address,
+	geofence_radius,
+	get_settings,
+	has_coordinates,
+	location_required,
+)
 
 
 class MVMVisitEntry(Document):
@@ -29,6 +36,7 @@ class MVMVisitEntry(Document):
 		self.validate_location(self.checkin_latitude, self.checkin_longitude)
 
 		self.set_customer_location()
+		self.compare_with_customer_location()
 		self.set_next_visit_date()
 
 	def set_employee(self):
@@ -62,9 +70,45 @@ class MVMVisitEntry(Document):
 			self.customer,
 			["customer_name", "company_name", "address_line_1", "address_line_2", "address_line_3", "city", "pincode", "state", "country"],
 		)
-		location = geocode_address(", ".join(cstr(part) for part in customer if part))
+		latitude, longitude = frappe.db.get_value("MVM Customer", self.customer, ["latitude", "longitude"])
+		if has_coordinates(latitude, longitude):
+			location = (latitude, longitude)
+		else:
+			location = geocode_address(", ".join(cstr(part) for part in customer if part))
 		if location:
 			self.customer_latitude, self.customer_longitude = location
+
+	def compare_with_customer_location(self):
+		"""Record whether the check-in was at the customer. A visit away from it is saved with a warning."""
+		radius = geofence_radius()
+		self.checkin_distance = 0
+		self.location_remark = None
+		if not radius:
+			return
+		if not has_coordinates(self.customer_latitude, self.customer_longitude):
+			self.location_remark = _("Customer location is not known")
+			return
+		if not has_coordinates(self.checkin_latitude, self.checkin_longitude):
+			self.location_remark = _("Check-in location was not captured")
+			return
+
+		self.checkin_distance = distance_in_metres(
+			self.checkin_latitude, self.checkin_longitude, self.customer_latitude, self.customer_longitude
+		)
+		if self.checkin_distance <= radius:
+			self.location_remark = _("Within {0} m of the customer location").format(radius)
+			return
+
+		self.location_remark = _("Not within {0} m of the customer location (about {1} m away)").format(
+			radius, round(self.checkin_distance)
+		)
+		frappe.msgprint(
+			_("The visit is saved, but you are not within {0} m of the customer location. You are about {1} m away.").format(
+				radius, round(self.checkin_distance)
+			),
+			title=_("Outside Customer Location"),
+			indicator="orange",
+		)
 
 	def set_next_visit_date(self):
 		days = cint(frappe.db.get_value("MVM Customer", self.customer, "next_followup_days"))
