@@ -151,7 +151,7 @@
    "reqd": 1
   },
   {
-   "description": "The check-in location of a visit is compared with this point. When empty, the address is looked up instead.",
+   "description": "The check-in location of a visit is compared with this point. When empty, the address is looked up instead. Only managers can change it.",
    "fieldname": "section_location",
    "fieldtype": "Section Break",
    "label": "Customer Location"
@@ -160,6 +160,7 @@
    "fieldname": "latitude",
    "fieldtype": "Float",
    "label": "Latitude",
+   "permlevel": 1,
    "precision": "7"
   },
   {
@@ -170,6 +171,7 @@
    "fieldname": "longitude",
    "fieldtype": "Float",
    "label": "Longitude",
+   "permlevel": 1,
    "precision": "7"
   },
   {
@@ -195,7 +197,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-07 18:00:00.000000",
+ "modified": "2026-10-09 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Customer",
@@ -235,6 +237,23 @@
    "report": 1,
    "role": "MVM User",
    "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "MVM Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "MVM User"
   }
  ],
  "row_format": "Dynamic",
