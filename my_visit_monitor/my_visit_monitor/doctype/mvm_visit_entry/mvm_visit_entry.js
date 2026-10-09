@@ -1,9 +1,10 @@
 // Copyright (c) 2026, huda and contributors
 // For license information, please see license.txt
 // File: mvm_visit_entry.js
-// Purpose: Visit entry form: customer filter, check-in position, Check Out button and location check colours.
+// Purpose: Visit entry form: customer filter, check-in position, Check Out button, location check colours
+//          and the map with the check-in, check-out and customer marks.
 // Created: 2026-10-05
-// Last updated: 2026-10-07
+// Last updated: 2026-10-09
 
 // Events of the visit form.
 frappe.ui.form.on("MVM Visit Entry", {
@@ -15,8 +16,10 @@ frappe.ui.form.on("MVM Visit Entry", {
 		frm.set_query("visit_reason", () => ({ filters: { inactive: 0 } }));
 	},
 
-	// Colour the location checks and show Check Out on a visit that is still checked in.
+	// Draw the map, colour the location checks and show Check Out on a visit that is still checked in.
 	refresh(frm) {
+		// Map with the check-in, check-out and customer marks.
+		render_map(frm);
 		// Check-in: green inside the radius, red outside.
 		color_location_check(frm, "location_remark", frm.doc.checkin_location_status);
 		// Check-out: green inside the radius, red outside.
@@ -49,6 +52,110 @@ frappe.ui.form.on("MVM Visit Entry", {
 			});
 	},
 });
+
+// Colours of the marks on the map.
+const MAP_CHECKIN_COLOR = "#2f9e44";
+const MAP_CHECKOUT_COLOR = "#e03131";
+const MAP_CUSTOMER_COLOR = "#1c7ed6";
+
+// Map of the visit: green mark where the employee checked in, red mark where they checked out,
+// blue mark for the customer.
+function render_map(frm) {
+	// The HTML field the map is drawn into.
+	const $wrapper = frm.get_field("location_map").$wrapper;
+	// A map drawn earlier for this form.
+	if (frm.mvm_map) {
+		// Remove it, so the form does not keep two maps.
+		frm.mvm_map.remove();
+		// Forget it.
+		frm.mvm_map = null;
+	}
+
+	// The three positions; check-out is drawn smaller and on top, so check-in stays visible
+	// when both are at the same spot.
+	const marks = [
+		{
+			label: __("Check In"),
+			// Name of the colour, written in the legend under the map.
+			color_name: __("Green"),
+			color: MAP_CHECKIN_COLOR,
+			radius: 11,
+			lat: frm.doc.checkin_latitude,
+			lng: frm.doc.checkin_longitude,
+		},
+		{
+			label: __("Check Out"),
+			color_name: __("Red"),
+			color: MAP_CHECKOUT_COLOR,
+			radius: 7,
+			lat: frm.doc.checkout_latitude,
+			lng: frm.doc.checkout_longitude,
+		},
+		{
+			label: __("Customer"),
+			color_name: __("Blue"),
+			color: MAP_CUSTOMER_COLOR,
+			radius: 5,
+			lat: frm.doc.customer_latitude,
+			lng: frm.doc.customer_longitude,
+		},
+	];
+	// Only positions that were captured are drawn; 0, 0 means there is none.
+	const points = marks.filter((point) => point.lat || point.lng);
+
+	// A new visit, or a visit without any position, has nothing to show.
+	if (frm.is_new() || !points.length) {
+		// Say so instead of an empty map.
+		$wrapper.html(`<div class="text-muted">${__("No location was captured for this visit.")}</div>`);
+		// Nothing to draw.
+		return;
+	}
+
+	// Line under the map for all three marks: a coloured dot, the colour name, what it marks and the
+	// coordinates, e.g. "Green - Check In: 18.557875, 73.907321"; "not captured" when there is no position.
+	const legend = marks
+		.map(
+			(point) =>
+				`<span style="margin-right: 16px; white-space: nowrap;">
+					<span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${point.color};"></span>
+					${point.color_name} - ${point.label}: ${point.lat || point.lng ? `${flt(point.lat, 6)}, ${flt(point.lng, 6)}` : __("not captured")}
+				</span>`
+		)
+		.join("");
+	// The box for the map and the legend under it.
+	$wrapper.html(
+		`<div class="mvm-visit-map" style="height: 320px; border-radius: var(--border-radius); z-index: 0;"></div>
+		<div class="small text-muted" style="margin-top: 8px;">${legend}</div>`
+	);
+
+	// Street map tiles Frappe uses everywhere (OpenStreetMap).
+	const tile = frappe.utils.map_defaults.tiles.default_tile;
+	// Create the map in the box and remember it on the form.
+	const map = (frm.mvm_map = L.map($wrapper.find(".mvm-visit-map").get(0)));
+	// Show the street map.
+	L.tileLayer(tile.url, tile.options).addTo(map);
+
+	// One round mark per position.
+	points.forEach((point) => {
+		// A filled circle with a white edge; hovering shows its name.
+		L.circleMarker([point.lat, point.lng], {
+			radius: point.radius,
+			color: "#ffffff",
+			weight: 2,
+			fillColor: point.color,
+			fillOpacity: 1,
+		})
+			.addTo(map)
+			.bindTooltip(point.label);
+	});
+
+	// The area that contains all marks.
+	const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng]));
+	// Zoom to that area, but not closer than street level.
+	map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+	// The section may still be laying out when the map is created; measure it again shortly after.
+	setTimeout(() => frm.mvm_map === map && map.invalidateSize(), 300);
+}
 
 // Text colour per status of a location check.
 const LOCATION_COLORS = { Inside: "#2f9e44", Outside: "#e03131" };
