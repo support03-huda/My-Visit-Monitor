@@ -1,9 +1,10 @@
 # Copyright (c) 2026, huda and contributors
 # For license information, please see license.txt
 # File: mvm_visit_entry.py
-# Purpose: Visit entry: check-in, check-out and the comparison with the customer location.
+# Purpose: Visit entry: check-in, check-out, the comparison with the customer location, and the manager
+#          action that makes a check-in position the customer location.
 # Created: 2026-10-05
-# Last updated: 2026-10-07
+# Last updated: 2026-10-09
 
 # Frappe framework.
 import frappe
@@ -14,7 +15,7 @@ from frappe.model.document import Document
 # Running numbers.
 from frappe.model.naming import getseries
 # Date, time and conversion helpers.
-from frappe.utils import add_days, cint, cstr, nowtime, today
+from frappe.utils import add_days, cint, cstr, flt, nowtime, today
 
 # Who the logged-in employee is and which zones they cover.
 from my_visit_monitor.permission import get_current_employee, get_employee_zones, is_manager
@@ -55,6 +56,12 @@ class MVMVisitEntry(Document):
 		self.checkout_date = self.checkout_time = None
 		# No check-out position yet.
 		self.checkout_latitude = self.checkout_longitude = 0
+		# So no accuracy of it either.
+		self.checkout_accuracy = 0
+		# Without a check-in position there is no accuracy to keep.
+		if not has_coordinates(self.checkin_latitude, self.checkin_longitude):
+			# Drop whatever was sent.
+			self.checkin_accuracy = 0
 		# The check-in position must be there when it is required.
 		self.validate_location(self.checkin_latitude, self.checkin_longitude)
 
@@ -208,7 +215,7 @@ class MVMVisitEntry(Document):
 
 	# Check out: called from the Check Out button with the position of the browser.
 	@frappe.whitelist()
-	def check_out(self, latitude=None, longitude=None):
+	def check_out(self, latitude=None, longitude=None, accuracy=None):
 		# The user must be allowed to change this visit.
 		self.check_permission("write")
 		# A visit can only be checked out once.
@@ -226,9 +233,35 @@ class MVMVisitEntry(Document):
 		self.checkout_latitude = latitude
 		# Check-out longitude.
 		self.checkout_longitude = longitude
+		# How exact the check-out position is, in metres; 0 when there is no position.
+		self.checkout_accuracy = flt(accuracy) if has_coordinates(latitude, longitude) else 0
 		# Was the check-out at the customer?
 		self.compare_with_customer_location("checkout", latitude, longitude)
 		# The visit is finished.
 		self.status = "Checked Out"
 		# Save the visit.
 		self.save()
+
+	# Manager action: the check-in position of this visit becomes the location of its customer.
+	# Later visits to the customer are compared with this exact point instead of the looked-up address.
+	@frappe.whitelist()
+	def use_checkin_as_customer_location(self):
+		# Field staff cannot change the location of a customer.
+		if not is_manager():
+			# Stop with a message.
+			frappe.throw(_("Only a manager can set the customer location."), frappe.PermissionError)
+		# A visit without a check-in position has nothing to copy.
+		if not has_coordinates(self.checkin_latitude, self.checkin_longitude):
+			# Stop with a message.
+			frappe.throw(_("This visit has no check-in location."))
+
+		# The customer of this visit.
+		customer = frappe.get_doc("MVM Customer", self.customer)
+		# Latitude of the check-in.
+		customer.latitude = self.checkin_latitude
+		# Longitude of the check-in.
+		customer.longitude = self.checkin_longitude
+		# Customers of the old database miss fields that are mandatory today; that must not block this.
+		customer.flags.ignore_mandatory = True
+		# Save the customer; the change shows in its history.
+		customer.save()

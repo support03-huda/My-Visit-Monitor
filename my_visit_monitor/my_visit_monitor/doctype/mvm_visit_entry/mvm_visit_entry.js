@@ -2,7 +2,8 @@
 // For license information, please see license.txt
 // File: mvm_visit_entry.js
 // Purpose: Visit entry form: customer filter, check-in position, Check Out button, location check colours
-//          and the map with the check-in, check-out and customer marks.
+//          the map with the check-in, check-out and customer marks, the accuracy of the captured position
+//          and the manager button that makes a check-in position the customer location.
 // Created: 2026-10-05
 // Last updated: 2026-10-09
 
@@ -29,12 +30,23 @@ frappe.ui.form.on("MVM Visit Entry", {
 			// Blue Check Out button.
 			frm.add_custom_button(__("Check Out"), () => check_out(frm)).addClass("btn-primary");
 		}
+		// A manager can make the check-in position of this visit the location of the customer.
+		if (
+			!frm.is_new() &&
+			(frm.doc.checkin_latitude || frm.doc.checkin_longitude) &&
+			frappe.user.has_role(["MVM Manager", "System Manager"])
+		) {
+			// Button in the bar above the form.
+			frm.add_custom_button(__("Set as Customer Location"), () => set_customer_location(frm));
+		}
 	},
 
 	// check in: the visit is saved with the position the browser reports
 	before_save(frm) {
 		// Only a new visit is checked in.
 		if (!frm.is_new()) return;
+		// Reading the position can take a few seconds; show that and block double clicks.
+		frappe.dom.freeze(__("Getting your location..."));
 		// Wait for the position before the visit is saved.
 		return get_position()
 			// The browser gave a position.
@@ -43,12 +55,21 @@ frappe.ui.form.on("MVM Visit Entry", {
 				frm.doc.checkin_latitude = coords.latitude;
 				// Check-in longitude.
 				frm.doc.checkin_longitude = coords.longitude;
+				// How exact the position is, in metres.
+				frm.doc.checkin_accuracy = coords.accuracy || 0;
+				// Tell the user when the position is too rough to trust.
+				warn_poor_accuracy(coords);
 			})
 			// The browser gave no position.
 			.catch((message) => {
 				// the server decides whether a visit without a location is allowed
 				// Tell the user why, for 15 seconds.
 				frappe.show_alert({ message, indicator: "orange" }, 15);
+			})
+			// With or without a position.
+			.then(() => {
+				// Let the user work again.
+				frappe.dom.unfreeze();
 			});
 	},
 });
@@ -172,8 +193,17 @@ function color_location_check(frm, fieldname, status) {
 
 // Check out with the current position; the server decides whether a position is required.
 function check_out(frm) {
+	// Reading the position can take a few seconds; show that and block double clicks.
+	frappe.dom.freeze(__("Getting your location..."));
 	// Ask the browser for the position.
 	get_position()
+		// The browser gave a position.
+		.then((coords) => {
+			// Tell the user when the position is too rough to trust.
+			warn_poor_accuracy(coords);
+			// Pass the position on.
+			return coords;
+		})
 		// The browser gave no position.
 		.catch((message) => {
 			// Tell the user why, for 15 seconds.
@@ -182,10 +212,16 @@ function check_out(frm) {
 			return {};
 		})
 		// With or without a position.
-		.then((coords) =>
-			// Check out on the server.
-			frm.call("check_out", { latitude: coords.latitude, longitude: coords.longitude })
-		)
+		.then((coords) => {
+			// Let the user work again.
+			frappe.dom.unfreeze();
+			// Check out on the server, with the position and how exact it is.
+			return frm.call("check_out", {
+				latitude: coords.latitude,
+				longitude: coords.longitude,
+				accuracy: coords.accuracy,
+			});
+		})
 		// The check-out is saved.
 		.then(() => {
 			// Green confirmation.
@@ -216,16 +252,93 @@ function get_position() {
 			// Stop here.
 			return;
 		}
-		// Ask the browser; this may show its permission prompt.
-		navigator.geolocation.getCurrentPosition(
-			// Success: latitude and longitude.
-			(position) => resolve(position.coords),
-			// Failure: a readable message.
-			(error) => reject(geolocation_error(error)),
-			// Use GPS when available, wait at most 10 seconds, never an old position.
-			{ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+		// The most exact position seen so far.
+		let best = null;
+		// The last error the browser reported.
+		let failure = null;
+		// Stop listening and hand over the best position, or the reason there is none.
+		const finish = () => {
+			// Stop the GPS.
+			navigator.geolocation.clearWatch(watch);
+			// Stop the timer.
+			clearTimeout(timer);
+			// A position was found.
+			if (best) resolve(best);
+			// No position at all.
+			else reject(failure ? geolocation_error(failure) : __("The request to get user location timed out."));
+		};
+		// Keep reading: the first position is often rough and gets better within seconds.
+		// This may show the permission prompt of the browser.
+		const watch = navigator.geolocation.watchPosition(
+			// A new position came in.
+			(position) => {
+				// Keep it when it is the first one or more exact than the best so far.
+				if (!best || position.coords.accuracy < best.accuracy) best = position.coords;
+				// Exact enough: no need to wait any longer.
+				if (best.accuracy <= GOOD_ACCURACY) finish();
+			},
+			// The browser reported an error.
+			(error) => {
+				// Remember it for the message.
+				failure = error;
+				// A refused permission will not get better by waiting.
+				if (error.code === error.PERMISSION_DENIED) finish();
+			},
+			// Use GPS when available and never an old position.
+			{ enableHighAccuracy: true, maximumAge: 0 }
 		);
+		// Take the best position seen when the waiting time is over.
+		const timer = setTimeout(finish, POSITION_WAIT);
 	});
+}
+
+// A position this exact (in metres) is taken at once.
+const GOOD_ACCURACY = 20;
+// Longest time to wait for a better position, in milliseconds.
+const POSITION_WAIT = 10000;
+// A position less exact than this (in metres) is saved with a warning.
+const POOR_ACCURACY = 100;
+
+// Tell the user when the phone only knows roughly where it is.
+function warn_poor_accuracy(coords) {
+	// Exact enough, or the browser did not say.
+	if (!coords.accuracy || coords.accuracy <= POOR_ACCURACY) return;
+	// Orange message for 15 seconds, with what helps.
+	frappe.show_alert(
+		{
+			message: __(
+				"Your location is only accurate to about {0} m. Switch on GPS / Location and stand outdoors for an exact check.",
+				[Math.round(coords.accuracy)]
+			),
+			indicator: "orange",
+		},
+		15
+	);
+}
+
+// Manager: make the check-in position of this visit the location of its customer.
+function set_customer_location(frm) {
+	// How exact the check-in position was, for the question.
+	const accuracy = frm.doc.checkin_accuracy
+		? __("The position is accurate to about {0} m.", [Math.round(frm.doc.checkin_accuracy)])
+		: __("The accuracy of this position was not recorded.");
+	// Ask first: this changes the customer for all later visits.
+	frappe.confirm(
+		__("Use the check-in position of this visit ({0}, {1}) as the location of customer {2}? {3}", [
+			flt(frm.doc.checkin_latitude, 6),
+			flt(frm.doc.checkin_longitude, 6),
+			frappe.utils.escape_html(frm.doc.customer_name || frm.doc.customer),
+			accuracy,
+		]),
+		// The manager said yes.
+		() => {
+			// Store the position on the customer.
+			frm.call("use_checkin_as_customer_location").then(() => {
+				// Green confirmation.
+				frappe.show_alert({ message: __("Customer location updated."), indicator: "green" });
+			});
+		}
+	);
 }
 
 // Readable message for a geolocation error.

@@ -20,6 +20,7 @@
   "column_break_checkin",
   "checkin_latitude",
   "checkin_longitude",
+  "checkin_accuracy",
   "location_remark",
   "checkin_location_status",
   "section_checkout",
@@ -28,6 +29,7 @@
   "column_break_checkout",
   "checkout_latitude",
   "checkout_longitude",
+  "checkout_accuracy",
   "checkout_location_remark",
   "checkout_location_status",
   "section_map",
@@ -158,6 +160,15 @@
    "read_only": 1
   },
   {
+   "description": "How exact the captured position is. Smaller is better; above 100 m the location check is not reliable.",
+   "fieldname": "checkin_accuracy",
+   "fieldtype": "Float",
+   "label": "Check-in Accuracy (m)",
+   "no_copy": 1,
+   "precision": "0",
+   "read_only": 1
+  },
+  {
    "fieldname": "location_remark",
    "fieldtype": "Data",
    "in_standard_filter": 1,
@@ -211,6 +222,15 @@
    "label": "Check-out Longitude",
    "no_copy": 1,
    "precision": "7",
+   "read_only": 1
+  },
+  {
+   "description": "How exact the captured position is. Smaller is better; above 100 m the location check is not reliable.",
+   "fieldname": "checkout_accuracy",
+   "fieldtype": "Float",
+   "label": "Check-out Accuracy (m)",
+   "no_copy": 1,
+   "precision": "0",
    "read_only": 1
   },
   {
@@ -285,7 +305,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-09 18:00:00.000000",
+ "modified": "2026-10-09 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Visit Entry",
