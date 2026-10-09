@@ -18,7 +18,7 @@ from frappe.utils import cint, flt
 # Digits after the letter of a master code.
 CODE_DIGITS = 5
 # Radius in metres used when none is stored in MVM Settings.
-DEFAULT_GEOFENCE_RADIUS = 50
+DEFAULT_GEOFENCE_RADIUS = 200
 
 
 # The MVM Settings record (cached).

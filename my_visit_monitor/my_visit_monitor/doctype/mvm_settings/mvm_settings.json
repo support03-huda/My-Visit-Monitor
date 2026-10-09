@@ -27,7 +27,7 @@
    "label": "Require Location for Check In / Check Out"
   },
   {
-   "default": "50",
+   "default": "200",
    "description": "A check-in farther than this from the customer's location is saved with a warning. 0 switches the comparison off.",
    "fieldname": "geofence_radius",
    "fieldtype": "Int",
@@ -47,7 +47,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-07 18:00:00.000000",
+ "modified": "2026-10-09 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Settings",
