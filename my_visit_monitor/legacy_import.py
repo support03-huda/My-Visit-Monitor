@@ -23,6 +23,9 @@ from frappe import _
 # Conversion and date helpers.
 from frappe.utils import cint, cstr, flt, get_datetime, now
 
+# Renames a record and every link to it.
+from frappe.model.rename_doc import rename_doc
+
 # Reader for the .sql file.
 from my_visit_monitor.sql_dump import parse_inserts
 
@@ -470,8 +473,10 @@ class LegacyImporter:
 				current += 1
 				# Same year and company id, new running number.
 				new_number = f"{number[:4]}{current:06d}"
-				# Move the visit made here.
-				frappe.rename_doc("MVM Visit Entry", number, new_number, force=True, ignore_permissions=True, show_alert=False)
+				# Move the visit made here (the model function: the frappe.rename_doc shortcut has no ignore_permissions).
+				rename_doc(
+					doctype="MVM Visit Entry", old=number, new=new_number, force=True, ignore_permissions=True, show_alert=False
+				)
 				# Remember the move.
 				self.renumbered.append((number, new_number))
 				# The number is free now: it is no longer a conflict.
