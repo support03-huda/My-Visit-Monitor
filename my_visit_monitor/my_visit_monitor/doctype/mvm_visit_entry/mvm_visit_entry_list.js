@@ -1,5 +1,5 @@
 // File: mvm_visit_entry_list.js
-// Purpose: Visit list: colour of the status, and a Check Out button on visits that are still checked in.
+// Purpose: Visit list: colour of the status, and a red Check Out button on visits that are still checked in.
 // Created: 2026-10-05
 // Last updated: 2026-10-10
 
@@ -16,6 +16,12 @@ frappe.listview_settings["MVM Visit Entry"] = {
 			? [__("Checked Out"), "green", "status,=,Checked Out"]
 			// Still checked in.
 			: [__("Checked In"), "orange", "status,=,Checked In"];
+	},
+
+	// Runs after the rows are drawn.
+	refresh(listview) {
+		// Frappe draws the row button grey; make every Check Out button red.
+		listview.$result.find(".btn-action").removeClass("btn-default").addClass("btn-danger");
 	},
 
 	// Button at the end of each row.

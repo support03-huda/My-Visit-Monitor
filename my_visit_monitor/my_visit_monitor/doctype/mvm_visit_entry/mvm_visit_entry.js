@@ -27,8 +27,8 @@ frappe.ui.form.on("MVM Visit Entry", {
 		color_location_check(frm, "checkout_location_remark", frm.doc.checkout_location_status);
 		// Saved, not checked out yet, and the user may change it.
 		if (!frm.is_new() && !frm.doc.checkout_date && frm.perm[0].write) {
-			// Blue Check Out button.
-			frm.add_custom_button(__("Check Out"), () => check_out(frm)).addClass("btn-primary");
+			// Red Check Out button.
+			frm.add_custom_button(__("Check Out"), () => check_out(frm)).addClass("btn-danger");
 		}
 		// A manager can make the check-in position of this visit the location of the customer.
 		if (
