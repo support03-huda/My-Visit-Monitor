@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 # File: mvm_registration.py
 # Purpose: Registration of a self-registered login, approved or rejected once by an administrator.
+#          On approval the person gets the email to set their password.
 # Created: 2026-10-10
 # Last updated: 2026-10-10
 
@@ -106,8 +107,21 @@ class MVMRegistration(Document):
 		self.decided_on = now_datetime()
 		# Save the registration.
 		self.save(ignore_permissions=True)
-		# The employee, so the form can open it to add zones.
-		return employee
+
+		# Email with the link to set the password; the person can log in after that.
+		try:
+			# Frappe's welcome email (subject "Welcome to ...", link to set the password).
+			user.send_welcome_mail_to_user()
+			# It went into the email queue.
+			mail_sent = True
+		# The email could not be prepared (for example no outgoing email account).
+		except Exception:
+			# Keep a record in the Error Log.
+			frappe.log_error(title="MVM registration welcome email failed")
+			# The administrator is told to set the password by hand.
+			mail_sent = False
+		# The employee, so the form can open it to add zones, and whether the email went out.
+		return {"employee": employee, "mail_sent": mail_sent}
 
 	# Reject: the login stays unusable.
 	@frappe.whitelist()

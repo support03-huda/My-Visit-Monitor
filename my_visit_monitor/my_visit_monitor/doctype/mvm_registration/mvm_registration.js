@@ -38,15 +38,25 @@ function approve_registration(frm) {
 		(values) => {
 			// Approve on the server.
 			frm.call("approve", { employee: values.employee || null }).then((r) => {
-				// Green confirmation.
-				frappe.show_alert({ message: __("Approved. The login can be used now."), indicator: "green" });
+				// Employee of the login and whether the set-password email went out.
+				const { employee, mail_sent } = r.message;
+				// Green confirmation, or how to give the password when no email could be sent.
+				frappe.show_alert(
+					{
+						message: mail_sent
+							? __("Approved. An email to set the password was sent to {0}.", [frappe.utils.escape_html(frm.doc.email)])
+							: __("Approved, but the email could not be sent. Set the password on the user and tell the person."),
+						indicator: mail_sent ? "green" : "orange",
+					},
+					15
+				);
 				// Show the updated registration.
 				frm.reload_doc();
 				// Remind to add the zones, without which the employee sees no customers.
 				frappe.msgprint({
 					title: __("Add zones"),
 					message: __("Open employee {0} and add the zones this person works in; without zones no customers are shown.", [
-						`<a href="/app/mvm-employee/${encodeURIComponent(r.message)}">${frappe.utils.escape_html(r.message)}</a>`,
+						`<a href="/app/mvm-employee/${encodeURIComponent(employee)}">${frappe.utils.escape_html(employee)}</a>`,
 					]),
 					indicator: "blue",
 				});

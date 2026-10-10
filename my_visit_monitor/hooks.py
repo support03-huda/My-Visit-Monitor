@@ -156,6 +156,8 @@ has_permission = {
 # A login made through Sign Up gets a registration that waits for an administrator.
 doc_events = {
 	"User": {
+		# No set-password email before approval.
+		"before_insert": "my_visit_monitor.registration.on_user_before_insert",
 		"after_insert": "my_visit_monitor.registration.on_user_insert",
 	},
 }

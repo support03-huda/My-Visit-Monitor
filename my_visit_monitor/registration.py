@@ -1,6 +1,7 @@
 # File: registration.py
 # Purpose: Approval of self-registered logins: a login made through Sign Up waits for an administrator
-#          before it can be used. Approval is needed only once, the first time.
+#          before it can be used. The set-password email is sent only after approval. Approval is needed
+#          only once, the first time.
 # Created: 2026-10-10
 # Last updated: 2026-10-10
 
@@ -36,6 +37,18 @@ def get_approvers():
 		for user in users
 		if user != "Administrator" and frappe.db.get_value("User", user, "enabled")
 	]
+
+
+# Hook (User, before_insert): no set-password email right after Sign Up; it is sent when the login is approved.
+def on_user_before_insert(doc, method=None):
+	# Logins created by someone who is logged in (an administrator) keep the normal welcome email.
+	if frappe.session.user != "Guest":
+		# Nothing to do.
+		return
+	# Do not send the welcome email now.
+	doc.send_welcome_email = 0
+	# Also the flag Frappe checks before sending it.
+	doc.flags.no_welcome_mail = True
 
 
 # Hook (User, after_insert): a login created by a visitor through Sign Up gets a registration that waits for approval.
