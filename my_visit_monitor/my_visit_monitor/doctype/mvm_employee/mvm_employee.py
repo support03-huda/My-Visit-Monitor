@@ -3,7 +3,7 @@
 # File: mvm_employee.py
 # Purpose: Employee master, with the zones the employee covers.
 # Created: 2026-10-05
-# Last updated: 2026-10-07
+# Last updated: 2026-10-10
 
 # Frappe framework.
 import frappe
@@ -28,8 +28,14 @@ class MVMEmployee(Document):
 		# Check the first letter of the employee name.
 		validate_code_letter(self, "employee_name")
 
-		# the employee is recognised at login through the user with the same email
-		if not self.user and self.email and frappe.db.exists("User", self.email):
+		# the employee is recognised at login through the user with the same email; only filled in for a new
+		# employee or a changed email, so an administrator can unlink a login on purpose (e.g. to delete it)
+		if (
+			not self.user
+			and self.email
+			and (self.is_new() or self.has_value_changed("email"))
+			and frappe.db.exists("User", self.email)
+		):
 			# Link that user to the employee.
 			self.user = self.email
 
