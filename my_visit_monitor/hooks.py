@@ -141,12 +141,15 @@ app_license = "mit"
 permission_query_conditions = {
 	"MVM Customer": "my_visit_monitor.permission.customer_query_conditions",
 	"MVM Visit Entry": "my_visit_monitor.permission.visit_query_conditions",
+	# Registrations are only for admins and team managers.
+	"MVM Registration": "my_visit_monitor.registration.registration_query_conditions",
 }
 
 # The same limits when a single customer or visit is opened.
 has_permission = {
 	"MVM Customer": "my_visit_monitor.permission.customer_has_permission",
 	"MVM Visit Entry": "my_visit_monitor.permission.visit_has_permission",
+	"MVM Registration": "my_visit_monitor.registration.registration_has_permission",
 }
 
 # Document Events

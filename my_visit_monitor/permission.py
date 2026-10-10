@@ -1,20 +1,22 @@
 # File: permission.py
 # Purpose: Who may see which customers and visits. Registered in hooks.py.
+#          Admin (MVM Manager / System Manager) sees everything. A team manager (an employee others report to)
+#          sees their own team. Every other employee sees only their own work.
 # Created: 2026-10-05
-# Last updated: 2026-10-07
+# Last updated: 2026-10-10
 
 # Frappe framework.
 import frappe
 
-# Users with one of these roles see everything.
+# Users with one of these roles see everything ("admin").
 MANAGER_ROLES = {"MVM Manager", "System Manager"}
 
 
-# True for Administrator and for users with a manager role.
+# True for Administrator and for users with an admin role.
 def is_manager(user=None):
 	# Default to the logged-in user.
 	user = user or frappe.session.user
-	# Administrator, or a user holding a manager role.
+	# Administrator, or a user holding an admin role.
 	return user == "Administrator" or bool(MANAGER_ROLES.intersection(frappe.get_roles(user)))
 
 
@@ -35,6 +37,38 @@ def get_current_employee(user=None):
 	return employee
 
 
+# The employee and everyone whose "Reporting To" is this employee.
+def get_team(employee):
+	# No employee, no team.
+	if not employee:
+		# Empty list.
+		return []
+	# Employees reporting to this one; the employee itself is added in front.
+	members = frappe.get_all(
+		"MVM Employee", filters={"reporting_to": employee, "name": ["!=", employee]}, pluck="name"
+	)
+	# The employee first, then the team members.
+	return [employee, *members]
+
+
+# True when others report to the employee of the user (a team manager such as Ishwar or Shirish).
+def is_team_manager(user=None):
+	# Employee of the user.
+	employee = get_current_employee(user)
+	# At least one other employee reports to them.
+	return bool(employee) and len(get_team(employee)) > 1
+
+
+# Employees whose work the user may see: None means everybody (admin), else a list of codes.
+def get_visible_employees(user=None):
+	# Admins see everybody.
+	if is_manager(user):
+		# No limit.
+		return None
+	# The user's own employee and their team; an empty list when the user has no employee record.
+	return get_team(get_current_employee(user))
+
+
 # Zones listed on the employee record.
 def get_employee_zones(employee):
 	# No employee, no zones.
@@ -47,67 +81,86 @@ def get_employee_zones(employee):
 	)
 
 
-# Field staff see the customers they follow, that report to them, or that are in their zones.
+# A list of codes as SQL text: ('A00001', 'S00004').
+def sql_list(codes):
+	# Every code quoted, separated by commas.
+	return "(" + ", ".join(frappe.db.escape(code) for code in codes) + ")"
+
+
+# Employees see the customers followed by, reporting to, or in a zone of someone in their team
+# (just themselves for field staff).
 def customer_query_conditions(user=None, doctype=None):
-	# Managers see every customer.
-	if is_manager(user):
+	# Whose customers the user may see.
+	team = get_visible_employees(user)
+	# Admins see every customer.
+	if team is None:
 		# No extra condition.
 		return ""
-	# Employee of the user.
-	employee = get_current_employee(user)
 	# A user without employee record sees nothing.
-	if not employee:
+	if not team:
 		# Condition that is never true.
 		return "1=0"
-	# Quote the code for use in SQL.
-	employee = frappe.db.escape(employee)
-	# Followed by the employee, reporting to the employee, or in one of their zones.
-	return f"""(`tabMVM Customer`.followed_by = {employee}
-		or `tabMVM Customer`.reporting_to = {employee}
+	# The team as SQL text.
+	codes = sql_list(team)
+	# Followed by the team, reporting to the team, or in one of the team's zones.
+	return f"""(`tabMVM Customer`.followed_by in {codes}
+		or `tabMVM Customer`.reporting_to in {codes}
 		or `tabMVM Customer`.zone in (
 			select zone from `tabMVM Employee Zone`
-			where parent = {employee} and parenttype = 'MVM Employee'))"""
+			where parent in {codes} and parenttype = 'MVM Employee'))"""
 
 
 # Same rule as customer_query_conditions, for a single customer that is opened.
 def customer_has_permission(doc, ptype=None, user=None):
-	# Managers may do everything; anyone with the role may create.
-	if is_manager(user) or ptype == "create":
+	# Anyone with the role may create a customer.
+	if ptype == "create":
 		# Allowed.
 		return True
-	# Employee of the user.
-	employee = get_current_employee(user)
-	# A user without employee record sees nothing.
-	if not employee:
-		# Not allowed.
-		return False
-	# Allowed for followed, reporting and same-zone customers.
-	return employee in (doc.followed_by, doc.reporting_to) or doc.zone in get_employee_zones(employee)
+	# Whose customers the user may see.
+	team = get_visible_employees(user)
+	# Admins may do everything.
+	if team is None:
+		# Allowed.
+		return True
+	# Followed by or reporting to someone in the team.
+	if doc.followed_by in team or doc.reporting_to in team:
+		# Allowed.
+		return True
+	# In a zone of someone in the team.
+	return any(doc.zone in get_employee_zones(member) for member in team)
 
 
-# Field staff see only their own visits.
+# Employees see the visits of their team (just their own for field staff).
 def visit_query_conditions(user=None, doctype=None):
-	# Managers see every visit.
-	if is_manager(user):
+	# Whose visits the user may see.
+	team = get_visible_employees(user)
+	# Admins see every visit.
+	if team is None:
 		# No extra condition.
 		return ""
-	# Employee of the user.
-	employee = get_current_employee(user)
 	# A user without employee record sees nothing.
-	if not employee:
+	if not team:
 		# Condition that is never true.
 		return "1=0"
-	# Only the visits of this employee.
-	return f"`tabMVM Visit Entry`.employee = {frappe.db.escape(employee)}"
+	# Only the visits of the team.
+	return f"`tabMVM Visit Entry`.employee in {sql_list(team)}"
 
 
 # Same rule as visit_query_conditions, for a single visit that is opened.
 def visit_has_permission(doc, ptype=None, user=None):
-	# Managers may do everything; anyone with the role may create.
-	if is_manager(user) or ptype == "create":
+	# Anyone with the role may create a visit (it is always their own).
+	if ptype == "create":
 		# Allowed.
 		return True
-	# Employee of the user.
-	employee = get_current_employee(user)
-	# Allowed only for the employee's own visit.
-	return bool(employee) and doc.employee == employee
+	# Whose visits the user may see.
+	team = get_visible_employees(user)
+	# Admins may do everything.
+	if team is None:
+		# Allowed.
+		return True
+	# Reading: a team manager may look at the visits of the whole team.
+	if ptype in (None, "read", "print", "email", "report", "export"):
+		# Allowed for visits of the team.
+		return doc.employee in team
+	# Changing (check out): only the employee's own visit.
+	return bool(team) and doc.employee == team[0]

@@ -4,7 +4,7 @@
 //          the top 10 customers overall and the comparison of all employees. The sections are shown in tabs
 //          (Overview, Attendance, Customers, Team) and every list can be exported as CSV.
 // Created: 2026-10-09
-// Last updated: 2026-10-09
+// Last updated: 2026-10-10
 
 // Names of the week days, Monday first, as shown above the calendar.
 const MVM_WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -233,8 +233,11 @@ frappe.pages["mvm-dashboard"].on_page_load = function (wrapper) {
 				state.employee = data.employee;
 				// Show that employee in the selector.
 				employee_field.set_value(data.employee || "");
-				// Field staff cannot pick another employee.
-				employee_field.df.read_only = data.is_manager ? 0 : 1;
+				// Field staff cannot pick another employee; admins and team managers can.
+				employee_field.df.read_only = data.can_compare ? 0 : 1;
+				// A team manager may only pick the members of the team.
+				employee_field.get_query = () =>
+					data.team_members ? { filters: { name: ["in", data.team_members] } } : {};
 				// Apply the read-only setting.
 				employee_field.refresh();
 				// Draw the page.

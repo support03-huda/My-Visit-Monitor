@@ -1,7 +1,7 @@
 # File: api.py
 # Purpose: Server methods called from the forms and pages: customer search, Magic customer import, Visit Dashboard figures.
 # Created: 2026-10-05
-# Last updated: 2026-10-09
+# Last updated: 2026-10-10
 
 # Frappe framework.
 import frappe
@@ -10,8 +10,8 @@ from frappe import _
 # Date helpers (add_days, add_months, get_last_day, getdate, today) and conversions (cint, cstr).
 from frappe.utils import add_days, add_months, cint, cstr, get_last_day, getdate, today
 
-# Who the logged-in employee is and which zones they cover.
-from my_visit_monitor.permission import get_current_employee, get_employee_zones, is_manager
+# Who the logged-in employee is, which zones they cover and whose work they may see.
+from my_visit_monitor.permission import get_current_employee, get_employee_zones, get_visible_employees, is_manager
 
 
 # Callable from the browser.
@@ -166,17 +166,21 @@ DASHBOARD_TOP_LIMIT = 10
 # A day counts as worked when the employee checked in to at least one visit on it.
 @frappe.whitelist()
 def get_dashboard(employee=None, start=None, end=None):
-	"""Return attendance, work figures, charts and, for managers, the comparison of all employees."""
-	# Managers may look at any employee.
+	"""Return attendance, work figures, charts and, for admins and team managers, the comparison of the employees."""
+	# Admins look at anyone.
 	manager = is_manager()
-	# Field staff always get their own record; a manager gets it when no employee was chosen.
-	if not manager or not employee:
-		# Employee of the logged-in user; None when there is none.
-		employee = get_current_employee()
+	# Whose figures the user may see: None for an admin, else the user's team (only themselves for field staff).
+	team = get_visible_employees()
 	# A chosen employee must exist.
-	elif not frappe.db.exists("MVM Employee", employee):
+	if employee and not frappe.db.exists("MVM Employee", employee):
 		# Stop with a message.
 		frappe.throw(_("Employee {0} does not exist.").format(employee))
+	# Nobody chosen, or someone outside the user's team: show the user's own figures.
+	if not employee or (team is not None and employee not in team):
+		# Employee of the logged-in user; None when there is none.
+		employee = get_current_employee()
+	# The user may compare employees: an admin, or a team manager (more than themselves in the team).
+	can_compare = team is None or len(team) > 1
 
 	# Today.
 	current = getdate(today())
@@ -194,6 +198,10 @@ def get_dashboard(employee=None, start=None, end=None):
 		"employee": employee,
 		"employee_name": frappe.db.get_value("MVM Employee", employee, "employee_name") if employee else None,
 		"is_manager": manager,
+		# May pick another employee and sees the Team tab.
+		"can_compare": can_compare,
+		# Employees a team manager may pick; None for an admin (everybody).
+		"team_members": team if (team is not None and can_compare) else None,
 		"today": today(),
 		"start": str(start),
 		"end": str(end),
@@ -204,12 +212,12 @@ def get_dashboard(employee=None, start=None, end=None):
 	if employee:
 		# Add them to the answer.
 		data.update(employee_dashboard(employee, start, end))
-	# Only managers see the other employees.
-	if manager:
-		# Add the comparison of all employees.
-		data["team"] = team_dashboard(start, end)
-		# Add the customers visited most by all employees together.
-		data["team_top_customers"] = top_customers(start, end)
+	# Admins see all employees, team managers their team; field staff see no comparison.
+	if can_compare:
+		# Add the comparison of the employees.
+		data["team"] = team_dashboard(start, end, team)
+		# Add the customers visited most by those employees together.
+		data["team_top_customers"] = top_customers(start, end, members=team)
 	# Answer for the page.
 	return data
 
@@ -473,10 +481,14 @@ def employee_dashboard(employee, start, end):
 	}
 
 
-# The customers with the most visits in the period: of one employee, or of all employees together.
-def top_customers(start, end, employee=None):
+# The customers with the most visits in the period: of one employee, of a group (`members`), or of everybody.
+def top_customers(start, end, employee=None, members=None):
 	# Extra condition when only one employee is wanted (fixed text, the value goes in separately).
 	condition = "and employee = %(employee)s" if employee else ""
+	# Extra condition when only a group of employees is wanted.
+	if members is not None:
+		# The codes go in separately as a list.
+		condition += " and employee in %(members)s"
 	# One row per customer, most visits first.
 	rows = frappe.db.sql(
 		f"""
@@ -489,7 +501,8 @@ def top_customers(start, end, employee=None):
 		order by visits desc, customer_name
 		limit {DASHBOARD_TOP_LIMIT}
 		""",
-		{"start": start, "end": end, "employee": employee},
+		# An empty group would be invalid SQL, so it gets a code that cannot exist.
+		{"start": start, "end": end, "employee": employee, "members": tuple(members or [""])},
 		as_dict=True,
 	)
 	# Dates are sent to the page as text.
@@ -500,8 +513,9 @@ def top_customers(start, end, employee=None):
 	return rows
 
 
-# Work figures of every employee for the period, the one with the most visits first.
-def team_dashboard(start, end):
+# Work figures of the employees for the period, the one with the most visits first.
+# `members`: only these employees (a team); None for everybody.
+def team_dashboard(start, end, members=None):
 	# Code -> name of every employee.
 	names = dict(frappe.db.sql("select name, employee_name from `tabMVM Employee`"))
 	# One row per employee.
@@ -510,6 +524,10 @@ def team_dashboard(start, end):
 	for code, item in performance(start, end).items():
 		# The set of missed customers is not needed here and cannot be sent to the page.
 		item.pop("missed")
+		# Someone outside the team.
+		if members is not None and code not in members:
+			# Leave them out.
+			continue
 		# The figures with the code and the name of the employee.
 		team.append({"employee": code, "employee_name": names.get(code) or code, **item})
 	# Most visits first; the name decides between equals.

@@ -10,7 +10,10 @@ import frappe
 # Translation function for messages shown to the user.
 from frappe import _
 
-# Roles that may approve or reject a registration ("admin").
+# Who manages whom.
+from my_visit_monitor.permission import is_team_manager
+
+# Roles that may approve or reject a registration ("admin"); team managers may as well.
 APPROVER_ROLES = ("System Manager", "MVM Manager")
 
 
@@ -18,8 +21,8 @@ APPROVER_ROLES = ("System Manager", "MVM Manager")
 def is_approver(user=None):
 	# Default to the logged-in user.
 	user = user or frappe.session.user
-	# Administrator, or a user holding an approver role.
-	return user == "Administrator" or bool(set(APPROVER_ROLES) & set(frappe.get_roles(user)))
+	# Administrator, a user holding an approver role, or a team manager (others report to them).
+	return user == "Administrator" or bool(set(APPROVER_ROLES) & set(frappe.get_roles(user))) or is_team_manager(user)
 
 
 # Enabled users who may approve, for the notification of a new registration.
@@ -31,12 +34,33 @@ def get_approvers():
 		pluck="parent",
 		distinct=True,
 	)
-	# Only enabled users; Administrator is a technical account and gets no notification.
+	# Logins of team managers: employees that others report to.
+	managers = frappe.db.sql_list(
+		"""
+		select distinct manager.user
+		from `tabMVM Employee` member
+		join `tabMVM Employee` manager on manager.name = member.reporting_to
+		where member.reporting_to != member.name and ifnull(manager.user, '') != '' and manager.inactive = 0
+		"""
+	)
+	# Only enabled users, each once; Administrator is a technical account and gets no notification.
 	return [
 		user
-		for user in users
+		for user in dict.fromkeys(users + managers)
 		if user != "Administrator" and frappe.db.get_value("User", user, "enabled")
 	]
+
+
+# Hooks for MVM Registration: only people who may approve see the registrations.
+def registration_query_conditions(user=None, doctype=None):
+	# Approvers see all of them, everybody else none.
+	return "" if is_approver(user) else "1=0"
+
+
+# Same rule for a single registration that is opened.
+def registration_has_permission(doc, ptype=None, user=None):
+	# Only approvers.
+	return is_approver(user)
 
 
 # Hook (User, before_insert): no set-password email right after Sign Up; it is sent when the login is approved.

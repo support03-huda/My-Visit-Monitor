@@ -95,7 +95,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-10 12:00:00.000000",
+ "modified": "2026-10-10 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Registration",
@@ -120,6 +120,12 @@
    "read": 1,
    "report": 1,
    "role": "MVM Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "MVM User",
    "write": 1
   }
  ],

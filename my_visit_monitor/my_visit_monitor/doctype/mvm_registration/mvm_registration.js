@@ -1,7 +1,7 @@
 // Copyright (c) 2026, huda and contributors
 // For license information, please see license.txt
 // File: mvm_registration.js
-// Purpose: Registration form: Approve and Reject buttons for administrators.
+// Purpose: Registration form: Approve and Reject buttons for admins and team managers.
 // Created: 2026-10-10
 // Last updated: 2026-10-10
 
@@ -9,8 +9,8 @@
 frappe.ui.form.on("MVM Registration", {
 	// Show the buttons while the registration waits for a decision.
 	refresh(frm) {
-		// Decided already, or not an administrator.
-		if (frm.doc.status !== "Pending" || !frappe.user.has_role(["System Manager", "MVM Manager"])) return;
+		// Decided already, or the user may not decide (the server says who may: admins and team managers).
+		if (frm.doc.status !== "Pending" || !(frm.doc.__onload || {}).can_decide) return;
 
 		// Green Approve button.
 		frm.add_custom_button(__("Approve"), () => approve_registration(frm)).addClass("btn-primary");
@@ -19,9 +19,9 @@ frappe.ui.form.on("MVM Registration", {
 	},
 });
 
-// Approve: link the login to an existing employee, or leave it empty to create a new one.
+// Approve: link the login to an existing employee or create a new one, and set the zones and the manager.
 function approve_registration(frm) {
-	// Ask which employee this person is.
+	// Ask which employee this person is, where they work and who their manager is.
 	frappe.prompt(
 		[
 			{
@@ -33,11 +33,32 @@ function approve_registration(frm) {
 					frappe.utils.escape_html(frm.doc.full_name || frm.doc.email),
 				]),
 			},
+			{
+				fieldname: "zones",
+				fieldtype: "Table MultiSelect",
+				options: "MVM Employee Zone",
+				label: __("Zones"),
+				description: __("Zones this person works in; their customers are shown to them."),
+			},
+			{
+				fieldname: "reporting_to",
+				fieldtype: "Link",
+				options: "MVM Employee",
+				label: __("Reports To (Manager)"),
+				// A team manager's own employee by default.
+				default: (frm.doc.__onload || {}).default_manager,
+			},
 		],
-		// The administrator pressed Approve.
+		// The approver pressed Approve.
 		(values) => {
+			// Zone names out of the multi-select rows.
+			const zones = (values.zones || []).map((row) => row.zone).filter(Boolean);
 			// Approve on the server.
-			frm.call("approve", { employee: values.employee || null }).then((r) => {
+			frm.call("approve", {
+				employee: values.employee || null,
+				zones,
+				reporting_to: values.reporting_to || null,
+			}).then((r) => {
 				// Employee of the login and whether the set-password email went out.
 				const { employee, mail_sent } = r.message;
 				// Green confirmation, or how to give the password when no email could be sent.
@@ -45,13 +66,15 @@ function approve_registration(frm) {
 					{
 						message: mail_sent
 							? __("Approved. An email to set the password was sent to {0}.", [frappe.utils.escape_html(frm.doc.email)])
-							: __("Approved, but the email could not be sent. Set the password on the user and tell the person."),
+							: __("Approved, but no email could be sent: the site has no outgoing email account. Set the password on the user (User > Password > Set Password) and tell the person."),
 						indicator: mail_sent ? "green" : "orange",
 					},
 					15
 				);
 				// Show the updated registration.
 				frm.reload_doc();
+				// Zones were chosen in the dialog: nothing to remind.
+				if (zones.length) return;
 				// Remind to add the zones, without which the employee sees no customers.
 				frappe.msgprint({
 					title: __("Add zones"),
