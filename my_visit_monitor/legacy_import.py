@@ -1,11 +1,16 @@
 # File: legacy_import.py
 # Purpose: Imports the old MyVisitMonitor MySQL database (MVM Settings > Import Old Database).
 # Created: 2026-10-07
-# Last updated: 2026-10-07
+# Last updated: 2026-10-10
 
 """Bring the data of the old MyVisitMonitor (ScriptCase / MySQL) database into this app.
 
 bench --site <site> execute my_visit_monitor.legacy_import.run --kwargs "{'path': '<dump.sql>'}"
+
+With merge=1 only the records that are missing are added (a newer dump on a site that is in use):
+existing records are left as they are, no logins are created and nothing is deleted.
+With renumber=1 as well, a visit made in this app that has the number of an old visit gets the next free
+number, and the old visit is added under its own number.
 
 The old codes are kept as they are: customers, employees, locations and visit reasons keep
 their code as name, visits keep their visit number.
@@ -38,17 +43,17 @@ ADMIN_GROUP = 1
 
 
 # Entry point for the bench command.
-def run(path, clear_existing=0, create_users=1):
+def run(path, clear_existing=0, create_users=1, merge=0, renumber=0):
 	"""Import a dump that is on the server."""
 	# Open the dump; unreadable characters are replaced.
 	with open(path, encoding="utf-8", errors="replace") as dump:
 		# Import its content.
-		return import_dump(dump.read(), clear_existing, create_users)
+		return import_dump(dump.read(), clear_existing, create_users, merge, renumber)
 
 
 # Callable from the browser, by POST only.
 @frappe.whitelist(methods=["POST"])
-def import_from_file(file_url, clear_existing=0, create_users=1):
+def import_from_file(file_url, clear_existing=0, create_users=1, merge=0, renumber=0):
 	"""Import a dump uploaded to the site."""
 	# Only a System Manager may run the import.
 	frappe.only_for("System Manager")
@@ -59,11 +64,13 @@ def import_from_file(file_url, clear_existing=0, create_users=1):
 		# Turn the bytes into text.
 		content = content.decode("utf-8", errors="replace")
 	# Import that text.
-	return import_dump(content, clear_existing, create_users)
+	return import_dump(content, clear_existing, create_users, merge, renumber)
 
 
 # Check the file, clear the existing records when asked, then import everything.
-def import_dump(text, clear_existing=0, create_users=1):
+# merge=1: keep every existing record and add only what is missing.
+# renumber=1 (with merge): move visits made here off the numbers of old visits.
+def import_dump(text, clear_existing=0, create_users=1, merge=0, renumber=0):
 	# All INSERT rows of the dump, per table.
 	tables = parse_inserts(text)
 	# A dump without customers and visits is not ours.
@@ -71,8 +78,8 @@ def import_dump(text, clear_existing=0, create_users=1):
 		# Stop with a message.
 		frappe.throw(_("This file does not look like a MyVisitMonitor database dump."))
 
-	# Doctypes that already hold records.
-	existing = [doctype for doctype in DOCTYPES if frappe.db.count(doctype)]
+	# Doctypes that already hold records; a merge keeps them all.
+	existing = [] if cint(merge) else [doctype for doctype in DOCTYPES if frappe.db.count(doctype)]
 	# Records exist and deleting them was not asked for.
 	if existing and not cint(clear_existing):
 		# Stop with a message.
@@ -87,9 +94,9 @@ def import_dump(text, clear_existing=0, create_users=1):
 		frappe.db.delete(doctype)
 
 	# Prepare the importer with the rows of the dump.
-	importer = LegacyImporter(tables)
-	# Run the import.
-	counts = importer.run(cint(create_users))
+	importer = LegacyImporter(tables, merge=cint(merge), renumber=cint(merge) and cint(renumber))
+	# Run the import; a merge never creates logins (people sign up and are approved).
+	counts = importer.run(0 if cint(merge) else cint(create_users))
 	# Text like `Users: 15, Zones: 14, ...`.
 	summary = ", ".join(f"{label}: {count}" for label, count in counts.items())
 	# Show it on the screen.
@@ -103,9 +110,13 @@ def import_dump(text, clear_existing=0, create_users=1):
 # Holds the rows of the dump and writes them into the MVM doctypes.
 class LegacyImporter:
 	# Index the tables that other tables refer to.
-	def __init__(self, tables):
+	def __init__(self, tables, merge=0, renumber=0):
 		# All rows of the dump.
 		self.tables = tables
+		# Only add missing records.
+		self.merge = merge
+		# Move visits made here off the numbers of old visits.
+		self.renumber = renumber
 		# Employee code -> employee row.
 		self.employees = {row["employee_code"]: row for row in self.rows("employeemst")}
 		# Customer code -> customer row.
@@ -148,6 +159,22 @@ class LegacyImporter:
 		counts["Customers"] = self.import_customers()
 		# Visits last: they refer to customers, employees and reasons.
 		counts["Visits"] = self.import_visits()
+		# A merge also reports open visits that were checked out in the old app since.
+		if self.merge:
+			# Visits whose check-out was added.
+			counts["Visits Checked Out"] = self.checked_out
+			# Visits made here that got a new number.
+			counts["Visits Renumbered"] = len(self.renumbered)
+			# Visit numbers already used by a different visit on this site.
+			counts["Visit Number Conflicts"] = len(self.conflicts)
+			# Old number -> new number of the moved visits, for the summary on the console.
+			if self.renumbered:
+				# Print them.
+				print("renumbered:", ", ".join(f"{old} -> {new}" for old, new in self.renumbered))
+			# Those numbers, for the summary on the console.
+			if self.conflicts:
+				# Print them.
+				print("conflicting visit numbers:", ", ".join(self.conflicts))
 		# Counts for the summary.
 		return counts
 
@@ -155,6 +182,10 @@ class LegacyImporter:
 
 	# Write one record with its old code, owner and dates.
 	def insert(self, doctype, name, row, by_employee=False, **values):
+		# A merge leaves an existing record as it is.
+		if self.merge and frappe.db.exists(doctype, name):
+			# Nothing created.
+			return 0
 		# New, empty record.
 		doc = frappe.new_doc(doctype)
 		# Fill in the field values.
@@ -376,6 +407,10 @@ class LegacyImporter:
 	def import_visits(self):
 		# Visits created, highest running number and its company id.
 		count, last_number, company_id = 0, 0, None
+		# Merge only: open visits that got their check-out, and numbers used by another visit.
+		self.checked_out, self.conflicts = 0, []
+		# Renumber only: old visits waiting for their number, and the moves made (old number, new number).
+		self.waiting, self.renumbered = [], []
 		# Every old visit.
 		for row in self.rows("visitentry"):
 			# Visit number, e.g. 2603001382.
@@ -409,22 +444,88 @@ class LegacyImporter:
 			if row["next_visit_date"] != row["visit_date_in"]:
 				# Keep the next visit date only when it is a different day.
 				values["next_visit_date"] = row["next_visit_date"]
-			# Create the visit; its owner is the employee who made it.
-			count += self.insert("MVM Visit Entry", number, row, by_employee=True, **values)
+			# A merge and the visit number is already on this site.
+			if self.merge and frappe.db.exists("MVM Visit Entry", number):
+				# Compare it with the old visit; a number taken by another visit waits when renumbering.
+				if not self.merge_visit(number, values) and self.renumber:
+					# Add it after the visit made here has moved.
+					self.waiting.append((number, row, values))
+			# A new visit.
+			else:
+				# Create the visit; its owner is the employee who made it.
+				count += self.insert("MVM Visit Entry", number, row, by_employee=True, **values)
 
 			# Highest running number so far (the last 6 digits).
 			if cint(number[-6:]) >= last_number:
 				# Remember it together with its company id (digits 3 and 4).
 				last_number, company_id = cint(number[-6:]), number[2:4]
 
+		# Renumbering: move the visits made here, then add the old visits under their own numbers.
+		if self.waiting:
+			# Highest number in use: the site's counter or the last old visit.
+			current = max(cint(frappe.db.get_value("Series", VISIT_SERIES, "current")), last_number)
+			# Every old visit whose number was taken.
+			for number, row, values in self.waiting:
+				# Next free running number.
+				current += 1
+				# Same year and company id, new running number.
+				new_number = f"{number[:4]}{current:06d}"
+				# Move the visit made here.
+				frappe.rename_doc("MVM Visit Entry", number, new_number, force=True, ignore_permissions=True, show_alert=False)
+				# Remember the move.
+				self.renumbered.append((number, new_number))
+				# The number is free now: it is no longer a conflict.
+				self.conflicts.remove(number)
+				# Add the old visit.
+				count += self.insert("MVM Visit Entry", number, row, by_employee=True, **values)
+			# New visits continue after the moved ones.
+			last_number = current
 		# New visits continue after the last old one.
 		self.continue_visit_numbers(last_number, company_id)
 		# Number of visits created.
 		return count
 
+	# Merge: the visit number exists. Same visit: add a check-out made in the old app since. Other visit: report it.
+	def merge_visit(self, number, values):
+		# The visit on this site.
+		current = frappe.db.get_value(
+			"MVM Visit Entry", number, ["employee", "checkin_date", "status"], as_dict=True
+		)
+		# A different employee or day: the number was given to a visit made in this app.
+		if current.employee != values["employee"] or cstr(current.checkin_date) != cstr(values["checkin_date"]):
+			# Report it and leave both alone.
+			self.conflicts.append(number)
+			# Not the same visit.
+			return False
+		# Still open here but checked out in the old app.
+		if current.status == "Checked In" and values["checkout_date"]:
+			# Copy the check-out without running the checks of a manual save.
+			frappe.db.set_value(
+				"MVM Visit Entry",
+				number,
+				{
+					"status": "Checked Out",
+					"checkout_date": values["checkout_date"],
+					"checkout_time": values["checkout_time"],
+					"checkout_latitude": values["checkout_latitude"],
+					"checkout_longitude": values["checkout_longitude"],
+				},
+				update_modified=False,
+			)
+			# Count it.
+			self.checked_out += 1
+		# The same visit.
+		return True
+
 	# Set the running number and the company id for new visits.
 	def continue_visit_numbers(self, last_number, company_id):
 		"""New visits carry on from the last old visit number."""
+		# A merge never lowers the counter: visits made here may have used higher numbers.
+		if self.merge:
+			# Current counter of this site.
+			current = frappe.db.get_value("Series", VISIT_SERIES, "current") or 0
+			# Keep the higher one.
+			last_number = max(cint(current), cint(last_number))
 		# The old app kept its own counter table.
 		for row in self.rows("documentmst"):
 			# The counter of the visits.

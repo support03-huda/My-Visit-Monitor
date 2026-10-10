@@ -10,6 +10,8 @@ import frappe
 
 # Users with one of these roles see everything ("admin").
 MANAGER_ROLES = {"MVM Manager", "System Manager"}
+# Role of a team manager ("manager"), given on approval; managers see their team.
+TEAM_MANAGER_ROLE = "MVM Team Manager"
 
 
 # True for Administrator and for users with an admin role.
@@ -51,8 +53,14 @@ def get_team(employee):
 	return [employee, *members]
 
 
-# True when others report to the employee of the user (a team manager such as Ishwar or Shirish).
+# True for a team manager: the Manager role, or others report to the employee of the user (Ishwar, Shirish).
 def is_team_manager(user=None):
+	# Default to the logged-in user.
+	user = user or frappe.session.user
+	# Holds the Manager role.
+	if TEAM_MANAGER_ROLE in frappe.get_roles(user):
+		# A manager.
+		return True
 	# Employee of the user.
 	employee = get_current_employee(user)
 	# At least one other employee reports to them.
@@ -128,6 +136,38 @@ def customer_has_permission(doc, ptype=None, user=None):
 		return True
 	# In a zone of someone in the team.
 	return any(doc.zone in get_employee_zones(member) for member in team)
+
+
+# Employee records: admins see all, a manager the team, an employee only their own record.
+def employee_query_conditions(user=None, doctype=None):
+	# Whose records the user may see.
+	team = get_visible_employees(user)
+	# Admins see every employee.
+	if team is None:
+		# No extra condition.
+		return ""
+	# A user without employee record sees none.
+	if not team:
+		# Condition that is never true.
+		return "1=0"
+	# Only the team.
+	return f"`tabMVM Employee`.name in {sql_list(team)}"
+
+
+# Same rule for a single employee record; everyone except admins may change only their own record.
+def employee_has_permission(doc, ptype=None, user=None):
+	# Whose records the user may see.
+	team = get_visible_employees(user)
+	# Admins may do everything.
+	if team is None:
+		# Allowed.
+		return True
+	# Reading: the team.
+	if ptype in (None, "read", "print", "email", "report", "export"):
+		# Allowed for the team.
+		return doc.name in team
+	# Creating, deleting and changing other records is for admins only; one's own record may be changed.
+	return ptype == "write" and bool(team) and doc.name == team[0]
 
 
 # Employees see the visits of their team (just their own for field staff).

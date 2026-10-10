@@ -43,6 +43,7 @@
    "in_list_view": 1,
    "label": "Email",
    "options": "Email",
+   "permlevel": 1,
    "reqd": 1
   },
   {
@@ -51,6 +52,7 @@
    "fieldtype": "Link",
    "label": "User",
    "options": "User",
+   "permlevel": 1,
    "unique": 1
   },
   {
@@ -73,14 +75,16 @@
    "fieldtype": "Link",
    "in_standard_filter": 1,
    "label": "Reporting To",
-   "options": "MVM Employee"
+   "options": "MVM Employee",
+   "permlevel": 1
   },
   {
    "default": "0",
    "fieldname": "inactive",
    "fieldtype": "Check",
    "in_standard_filter": 1,
-   "label": "Inactive"
+   "label": "Inactive",
+   "permlevel": 1
   },
   {
    "description": "The employee can log visits for customers in these zones.",
@@ -90,7 +94,7 @@
   },
   {
    "fieldname": "zones",
-   "fieldtype": "Table",
+   "fieldtype": "Table MultiSelect",
    "label": "Zones",
    "options": "MVM Employee Zone"
   },
@@ -164,7 +168,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-07 10:00:00.000000",
+ "modified": "2026-10-10 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Employee",
@@ -176,6 +180,7 @@
    "delete": 1,
    "email": 1,
    "export": 1,
+   "permlevel": 0,
    "print": 1,
    "read": 1,
    "report": 1,
@@ -188,6 +193,7 @@
    "delete": 1,
    "email": 1,
    "export": 1,
+   "permlevel": 0,
    "print": 1,
    "read": 1,
    "report": 1,
@@ -196,8 +202,41 @@
    "write": 1
   },
   {
+   "export": 1,
+   "permlevel": 0,
+   "print": 1,
    "read": 1,
    "report": 1,
+   "role": "MVM Team Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 0,
+   "print": 1,
+   "read": 1,
+   "role": "MVM User",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "MVM Manager",
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "MVM Team Manager"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
    "role": "MVM User"
   }
  ],

@@ -2,7 +2,7 @@
 // Purpose: Visit Dashboard page: work figures of an employee for a month, quarter or year (for appraisals),
 //          month calendar (worked days green, weekend shaded), daily attendance list with customer names, top 10 customers, and for managers the top 10 employees,
 //          the top 10 customers overall and the comparison of all employees. The sections are shown in tabs
-//          (Overview, Attendance, Customers, Team) and every list can be exported as CSV.
+//          (Overview, Attendance, Customers, Team) and every list can be exported as Excel, PDF, Word or CSV.
 // Created: 2026-10-09
 // Last updated: 2026-10-10
 
@@ -93,10 +93,26 @@ function mvm_percent(part, whole) {
 	return whole ? `${Math.min(100, Math.round((part / whole) * 100))}%` : "-";
 }
 
-// Heading of a list with an Export button; `name` becomes the first part of the file name.
+// Export formats offered under every list: format code and label.
+const MVM_EXPORT_FORMATS = [
+	["xlsx", "Excel"],
+	["pdf", "PDF"],
+	["doc", "Word"],
+	["csv", "CSV"],
+];
+
+// Heading of a list with an Export menu; `name` becomes the first part of the file name.
 function mvm_heading(title, name) {
-	// The title on the left, the button on the right.
-	return `<h5 class="mvm-heading"><span>${title}</span><button class="btn btn-default btn-xs" data-export="${name}">${__("Export")}</button></h5>`;
+	// One menu item per format.
+	const items = MVM_EXPORT_FORMATS.map(
+		([format, label]) => `<a class="dropdown-item" href="#" data-export="${name}" data-format="${format}">${__(label)}</a>`
+	).join("");
+	// The title on the left, the Export menu on the right.
+	return `<h5 class="mvm-heading"><span>${title}</span>
+		<span class="dropdown">
+			<button class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" aria-expanded="false">${__("Export")}</button>
+			<span class="dropdown-menu dropdown-menu-right">${items}</span>
+		</span></h5>`;
 }
 
 // Rows of texts as CSV text that Excel opens directly.
@@ -735,10 +751,14 @@ frappe.pages["mvm-dashboard"].on_page_load = function (wrapper) {
 		});
 		// A green day or a visit count opens the visits of that day.
 		$body.find("[data-date]").on("click", (event) => open_visits($(event.currentTarget).attr("data-date")));
-		// An Export button saves the list under it as a CSV file.
+		// An Export menu item saves the list under it as Excel, PDF, Word or CSV.
 		$body.find("[data-export]").on("click", (event) => {
-			// The button that was clicked.
+			// Do not follow the "#" link.
+			event.preventDefault();
+			// The menu item that was clicked.
 			const $button = $(event.currentTarget);
+			// Chosen format.
+			const format = $button.attr("data-format") || "csv";
 			// Which list it belongs to.
 			const name = $button.attr("data-export");
 			// The table that follows the heading of the button.
@@ -755,8 +775,30 @@ frappe.pages["mvm-dashboard"].on_page_load = function (wrapper) {
 				);
 			// The comparison is about everybody; the other lists are about one employee.
 			const who = name.includes("all") ? "all" : state.employee || "none";
-			// For example daily-attendance_A00001_2026-10-01_2026-10-31.csv
-			mvm_download(`${name}_${who}_${period.start}_${period.end}.csv`, mvm_csv(rows));
+			// For example daily-attendance_A00001_2026-10-01_2026-10-31
+			const filename = `${name}_${who}_${period.start}_${period.end}`;
+			// CSV is made in the browser.
+			if (format === "csv") {
+				// Save it.
+				mvm_download(`${filename}.csv`, mvm_csv(rows));
+				// Done.
+				return;
+			}
+			// Title printed above the table: the list's heading, the employee and the period.
+			const title = [
+				$button.closest("h5").find("span").first().text().trim(),
+				name.includes("all") ? "" : last.data.employee_name || "",
+				period.title,
+			]
+				.filter(Boolean)
+				.join(" - ");
+			// Excel, PDF and Word are made on the server and downloaded (export_table in api.py).
+			open_url_post("/api/method/my_visit_monitor.api.export_table", {
+				title,
+				rows: JSON.stringify(rows),
+				file_format: format,
+				filename,
+			});
 		});
 		// A row of the comparison shows that employee.
 		$body.find("[data-employee]").on("click", (event) => {

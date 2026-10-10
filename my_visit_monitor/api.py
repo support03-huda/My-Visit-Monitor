@@ -152,6 +152,17 @@ def import_magic_customers(file_url, skip_header=1):
 	return {"created": created, "skipped": skipped}
 
 
+# Check out a visit from the visit list (the form calls the method on the visit itself).
+@frappe.whitelist(methods=["POST"])
+def check_out_visit(visit, latitude=None, longitude=None, accuracy=None):
+	# The visit; its check_out method checks that the user may change it.
+	doc = frappe.get_doc("MVM Visit Entry", visit)
+	# Save the check-out with the position.
+	doc.check_out(latitude, longitude, accuracy)
+	# Status for the list.
+	return doc.status
+
+
 # Longest period the Visit Dashboard may ask for, in days (a leap year).
 DASHBOARD_MAX_DAYS = 366
 # Months shown in the visits-per-month chart.
@@ -534,6 +545,88 @@ def team_dashboard(start, end, members=None):
 	team.sort(key=lambda row: (-row["visits"], row["employee_name"]))
 	# Rows for the comparison table.
 	return team
+
+
+# Most rows a dashboard list may send for export.
+EXPORT_MAX_ROWS = 5000
+
+
+# Turn a list from the Visit Dashboard into an Excel, PDF or Word file and send it as a download.
+# `rows`: the table as a JSON list of rows (first row = column headings), exactly as the user sees it.
+@frappe.whitelist(methods=["POST"])
+def export_table(title, rows, file_format="xlsx", filename=None):
+	# The table sent by the page.
+	rows = frappe.parse_json(rows)
+	# It must be a list of rows of a sensible size.
+	if not isinstance(rows, list) or not rows or len(rows) > EXPORT_MAX_ROWS:
+		# Stop with a message.
+		frappe.throw(_("Nothing to export."))
+	# Every cell as text; a row that is not a list becomes an empty row.
+	rows = [[cstr(cell) for cell in row] if isinstance(row, list) else [] for row in rows]
+	# Safe file name: letters, digits, dash and underscore only.
+	name = "".join(char if char.isalnum() or char in "-_" else "_" for char in cstr(filename or "export"))[:120]
+
+	# Excel workbook.
+	if file_format == "xlsx":
+		# Frappe's Excel writer.
+		from frappe.utils.xlsxutils import make_xlsx
+
+		# Sheet names may hold at most 31 characters and no [ ] : * ? / \.
+		sheet = "".join(char for char in cstr(title) if char not in "[]:*?/\\")[:31] or "Export"
+		# File content.
+		content = make_xlsx(rows, sheet).getvalue()
+		# File extension.
+		extension = "xlsx"
+	# PDF document.
+	elif file_format == "pdf":
+		# Frappe's PDF writer.
+		from frappe.utils.pdf import get_pdf
+
+		# Landscape page with the table.
+		content = get_pdf(export_html(title, rows), {"orientation": "Landscape"})
+		# File extension.
+		extension = "pdf"
+	# Word document: Word opens an HTML page saved as .doc.
+	elif file_format == "doc":
+		# Page with the table, marked as a Word document.
+		content = export_html(title, rows, word=True).encode("utf-8")
+		# File extension.
+		extension = "doc"
+	# Anything else.
+	else:
+		# Stop with a message.
+		frappe.throw(_("Unknown export format {0}.").format(file_format))
+
+	# Name of the downloaded file.
+	frappe.response.filename = f"{name}.{extension}"
+	# Its content.
+	frappe.response.filecontent = content
+	# Send it as a download instead of JSON.
+	frappe.response.type = "download"
+
+
+# An HTML page with a title and the table, for the PDF and Word exports.
+def export_html(title, rows, word=False):
+	# Escapes text for HTML.
+	from frappe.utils import escape_html
+
+	# First row: the column headings.
+	head = "".join(f"<th>{escape_html(cell)}</th>" for cell in rows[0])
+	# The other rows.
+	body = "".join("<tr>" + "".join(f"<td>{escape_html(cell)}</td>" for cell in row) + "</tr>" for row in rows[1:])
+	# Word needs to be told the page is a Word document.
+	word_head = '<meta name="ProgId" content="Word.Document">' if word else ""
+	# Whole page with simple table lines.
+	return f"""<html><head><meta charset="utf-8">{word_head}
+		<style>
+			body {{ font-family: Arial, sans-serif; font-size: 11px; }}
+			h3 {{ margin: 0 0 4px; }}
+			table {{ border-collapse: collapse; width: 100%; }}
+			th, td {{ border: 1px solid #999; padding: 4px 6px; text-align: left; }}
+			th {{ background: #eee; }}
+		</style></head>
+		<body><h3>{escape_html(title)}</h3><p>{escape_html(today())}</p>
+		<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></body></html>"""
 
 
 # A time of day as HH:MM; an empty text when there is none.

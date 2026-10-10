@@ -5,7 +5,7 @@
 //          the map with the check-in, check-out and customer marks, the accuracy of the captured position
 //          and the manager button that makes a check-in position the customer location.
 // Created: 2026-10-05
-// Last updated: 2026-10-09
+// Last updated: 2026-10-10
 
 // Events of the visit form.
 frappe.ui.form.on("MVM Visit Entry", {
@@ -48,7 +48,8 @@ frappe.ui.form.on("MVM Visit Entry", {
 		// Reading the position can take a few seconds; show that and block double clicks.
 		frappe.dom.freeze(__("Getting your location..."));
 		// Wait for the position before the visit is saved.
-		return get_position()
+		return my_visit_monitor.position
+			.get()
 			// The browser gave a position.
 			.then((coords) => {
 				// Check-in latitude.
@@ -58,7 +59,7 @@ frappe.ui.form.on("MVM Visit Entry", {
 				// How exact the position is, in metres.
 				frm.doc.checkin_accuracy = coords.accuracy || 0;
 				// Tell the user when the position is too rough to trust.
-				warn_poor_accuracy(coords);
+				my_visit_monitor.position.warn_poor_accuracy(coords);
 			})
 			// The browser gave no position.
 			.catch((message) => {
@@ -191,129 +192,13 @@ function color_location_check(frm, fieldname, status) {
 	$value.css("font-weight", LOCATION_COLORS[status] ? 600 : "");
 }
 
-// Check out with the current position; the server decides whether a position is required.
+// Check out with the current position (shared helper in public/js/mvm_position.js), then show the saved visit.
 function check_out(frm) {
-	// Reading the position can take a few seconds; show that and block double clicks.
-	frappe.dom.freeze(__("Getting your location..."));
-	// Ask the browser for the position.
-	get_position()
-		// The browser gave a position.
-		.then((coords) => {
-			// Tell the user when the position is too rough to trust.
-			warn_poor_accuracy(coords);
-			// Pass the position on.
-			return coords;
-		})
-		// The browser gave no position.
-		.catch((message) => {
-			// Tell the user why, for 15 seconds.
-			frappe.show_alert({ message, indicator: "orange" }, 15);
-			// Carry on without a position.
-			return {};
-		})
-		// With or without a position.
-		.then((coords) => {
-			// Let the user work again.
-			frappe.dom.unfreeze();
-			// Check out on the server, with the position and how exact it is.
-			return frm.call("check_out", {
-				latitude: coords.latitude,
-				longitude: coords.longitude,
-				accuracy: coords.accuracy,
-			});
-		})
-		// The check-out is saved.
-		.then(() => {
-			// Green confirmation.
-			frappe.show_alert({ message: __("Out time updated successfully!"), indicator: "green" });
-			// Show the saved visit.
-			frm.reload_doc();
-		});
-}
-
-// Ask the browser for the current position.
-function get_position() {
-	// Resolves with the position, rejects with a message.
-	return new Promise((resolve, reject) => {
-		// The page is not served over HTTPS.
-		if (!window.isSecureContext) {
-			// browsers never share the location with a plain http:// page
-			// Reject with the reason.
-			reject(
-				__("Location is blocked because {0} is not an HTTPS address.", [window.location.origin])
-			);
-			// Stop here.
-			return;
-		}
-		// The browser has no geolocation.
-		if (!navigator.geolocation) {
-			// Reject with the reason.
-			reject(__("Geolocation is not supported by this browser."));
-			// Stop here.
-			return;
-		}
-		// The most exact position seen so far.
-		let best = null;
-		// The last error the browser reported.
-		let failure = null;
-		// Stop listening and hand over the best position, or the reason there is none.
-		const finish = () => {
-			// Stop the GPS.
-			navigator.geolocation.clearWatch(watch);
-			// Stop the timer.
-			clearTimeout(timer);
-			// A position was found.
-			if (best) resolve(best);
-			// No position at all.
-			else reject(failure ? geolocation_error(failure) : __("The request to get user location timed out."));
-		};
-		// Keep reading: the first position is often rough and gets better within seconds.
-		// This may show the permission prompt of the browser.
-		const watch = navigator.geolocation.watchPosition(
-			// A new position came in.
-			(position) => {
-				// Keep it when it is the first one or more exact than the best so far.
-				if (!best || position.coords.accuracy < best.accuracy) best = position.coords;
-				// Exact enough: no need to wait any longer.
-				if (best.accuracy <= GOOD_ACCURACY) finish();
-			},
-			// The browser reported an error.
-			(error) => {
-				// Remember it for the message.
-				failure = error;
-				// A refused permission will not get better by waiting.
-				if (error.code === error.PERMISSION_DENIED) finish();
-			},
-			// Use GPS when available and never an old position.
-			{ enableHighAccuracy: true, maximumAge: 0 }
-		);
-		// Take the best position seen when the waiting time is over.
-		const timer = setTimeout(finish, POSITION_WAIT);
+	// Read the position and save the check-out.
+	my_visit_monitor.position.check_out(frm.doc.name).then(() => {
+		// Show the saved visit.
+		frm.reload_doc();
 	});
-}
-
-// A position this exact (in metres) is taken at once.
-const GOOD_ACCURACY = 20;
-// Longest time to wait for a better position, in milliseconds.
-const POSITION_WAIT = 10000;
-// A position less exact than this (in metres) is saved with a warning.
-const POOR_ACCURACY = 100;
-
-// Tell the user when the phone only knows roughly where it is.
-function warn_poor_accuracy(coords) {
-	// Exact enough, or the browser did not say.
-	if (!coords.accuracy || coords.accuracy <= POOR_ACCURACY) return;
-	// Orange message for 15 seconds, with what helps.
-	frappe.show_alert(
-		{
-			message: __(
-				"Your location is only accurate to about {0} m. Switch on GPS / Location and stand outdoors for an exact check.",
-				[Math.round(coords.accuracy)]
-			),
-			indicator: "orange",
-		},
-		15
-	);
 }
 
 // Manager: make the check-in position of this visit the location of its customer.
@@ -339,27 +224,4 @@ function set_customer_location(frm) {
 			});
 		}
 	);
-}
-
-// Readable message for a geolocation error.
-function geolocation_error(error) {
-	// The browser reports a code.
-	switch (error.code) {
-		// The user refused the permission.
-		case error.PERMISSION_DENIED:
-			// Message for a refused permission.
-			return __("User denied the request for Geolocation.");
-		// The device could not find its position.
-		case error.POSITION_UNAVAILABLE:
-			// Message for an unknown position.
-			return __("Location information is unavailable.");
-		// It took too long.
-		case error.TIMEOUT:
-			// Message for a timeout.
-			return __("The request to get user location timed out.");
-		// Anything else.
-		default:
-			// Message for an unknown error.
-			return __("An unknown error occurred.");
-	}
 }

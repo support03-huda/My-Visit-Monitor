@@ -1,7 +1,7 @@
 // Copyright (c) 2026, huda and contributors
 // For license information, please see license.txt
 // File: mvm_registration.js
-// Purpose: Registration form: Approve and Reject buttons for admins and team managers.
+// Purpose: Registration form: Approve (employee, manager, role) and Reject buttons for admins and managers.
 // Created: 2026-10-10
 // Last updated: 2026-10-10
 
@@ -19,9 +19,11 @@ frappe.ui.form.on("MVM Registration", {
 	},
 });
 
-// Approve: link the login to an existing employee or create a new one, and set the zones and the manager.
+// Approve: link the login to the existing employee (found by email) or a new one, set the manager and the role.
 function approve_registration(frm) {
-	// Ask which employee this person is, where they work and who their manager is.
+	// What the server worked out for this registration.
+	const onload = frm.doc.__onload || {};
+	// Ask which employee this person is, who their manager is and what they become.
 	frappe.prompt(
 		[
 			{
@@ -29,19 +31,23 @@ function approve_registration(frm) {
 				fieldtype: "Link",
 				options: "MVM Employee",
 				label: __("Existing Employee"),
-				description: __("Leave empty to create a new employee for {0}.", [
-					frappe.utils.escape_html(frm.doc.full_name || frm.doc.email),
-				]),
+				// The employee with the same email, when there is one.
+				default: onload.existing_employee,
+				description: onload.existing_employee
+					? __("Found by email. Change it only if this is someone else.")
+					: __("No employee with this email. Leave empty to create a new employee for {0}.", [
+							frappe.utils.escape_html(frm.doc.full_name || frm.doc.email),
+					  ]),
 			},
 			{
-				fieldname: "zones",
-				// A plain list of zone names; a "Table MultiSelect" fails in a dialog because the child table
-				// is not loaded there, which made the Approve button do nothing.
-				fieldtype: "MultiSelectList",
-				label: __("Zones"),
-				description: __("Zones this person works in; their customers are shown to them."),
-				// Zones matching what is typed, from the zone master.
-				get_data: (text) => frappe.db.get_link_options("MVM Zone", text),
+				fieldname: "role",
+				fieldtype: "Select",
+				label: __("Role"),
+				// Managers may only approve employees.
+				options: onload.is_admin ? ["Employee", "Manager", "Admin"].join("\n") : "Employee",
+				default: "Employee",
+				reqd: 1,
+				description: __("Employee: own work only. Manager: own team. Admin: everything."),
 			},
 			{
 				fieldname: "reporting_to",
@@ -54,13 +60,11 @@ function approve_registration(frm) {
 		],
 		// The approver pressed Approve.
 		(values) => {
-			// Chosen zone names.
-			const zones = (values.zones || []).filter(Boolean);
 			// Approve on the server.
 			frm.call("approve", {
 				employee: values.employee || null,
-				zones,
 				reporting_to: values.reporting_to || null,
+				role: values.role || "Employee",
 			}).then((r) => {
 				// Employee of the login and whether the set-password email went out.
 				const { employee, mail_sent } = r.message;
@@ -76,12 +80,12 @@ function approve_registration(frm) {
 				);
 				// Show the updated registration.
 				frm.reload_doc();
-				// Zones were chosen in the dialog: nothing to remind.
-				if (zones.length) return;
+				// An existing employee keeps the zones it has: nothing to remind.
+				if (values.employee) return;
 				// Remind to add the zones, without which the employee sees no customers.
 				frappe.msgprint({
 					title: __("Add zones"),
-					message: __("Open employee {0} and add the zones this person works in; without zones no customers are shown.", [
+					message: __("New employee {0} has no zones yet. The employee can add them on their own record, or open it and add them now; without zones no customers are shown.", [
 						`<a href="/app/mvm-employee/${encodeURIComponent(employee)}">${frappe.utils.escape_html(employee)}</a>`,
 					]),
 					indicator: "blue",

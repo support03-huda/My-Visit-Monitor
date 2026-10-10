@@ -50,6 +50,10 @@ app_license = "mit"
 # include js in doctype views
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+
+# Reading the phone's position, used by the visit form and by the Check Out button in the visit list.
+doctype_js = {"MVM Visit Entry": "public/js/mvm_position.js"}
+doctype_list_js = {"MVM Visit Entry": "public/js/mvm_position.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -143,6 +147,8 @@ permission_query_conditions = {
 	"MVM Visit Entry": "my_visit_monitor.permission.visit_query_conditions",
 	# Registrations are only for admins and team managers.
 	"MVM Registration": "my_visit_monitor.registration.registration_query_conditions",
+	# Employee records: admins all, managers their team, employees their own.
+	"MVM Employee": "my_visit_monitor.permission.employee_query_conditions",
 }
 
 # The same limits when a single customer or visit is opened.
@@ -150,6 +156,7 @@ has_permission = {
 	"MVM Customer": "my_visit_monitor.permission.customer_has_permission",
 	"MVM Visit Entry": "my_visit_monitor.permission.visit_has_permission",
 	"MVM Registration": "my_visit_monitor.registration.registration_has_permission",
+	"MVM Employee": "my_visit_monitor.permission.employee_has_permission",
 }
 
 # Document Events

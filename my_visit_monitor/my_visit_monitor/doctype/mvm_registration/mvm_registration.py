@@ -2,7 +2,8 @@
 # For license information, please see license.txt
 # File: mvm_registration.py
 # Purpose: Registration of a self-registered login, approved or rejected once by an admin or a team manager.
-#          Approval sets the employee, its zones and manager; the person then gets the email to set their password.
+#          Approval links the existing employee with the same email (or creates one), sets the manager and the role
+#          (Employee, Manager or Admin); the person then gets the email to set their password.
 # Created: 2026-10-10
 # Last updated: 2026-10-10
 
@@ -22,6 +23,12 @@ from my_visit_monitor.registration import is_approver
 
 # Role every approved login gets: field staff ("user").
 APPROVED_ROLE = "MVM User"
+# Roles per choice in the approval dialog. Only admins may give Manager or Admin.
+ROLE_CHOICES = {
+	"Employee": ["MVM User"],
+	"Manager": ["MVM User", "MVM Team Manager"],
+	"Admin": ["MVM User", "MVM Manager"],
+}
 
 
 # Controller of MVM Registration.
@@ -32,6 +39,28 @@ class MVMRegistration(Document):
 		self.set_onload("can_decide", is_approver())
 		# A team manager approves people into their own team; an admin chooses.
 		self.set_onload("default_manager", None if is_manager() else get_current_employee())
+		# Only admins may make someone a Manager or an Admin.
+		self.set_onload("is_admin", is_manager())
+		# The existing employee this login belongs to, found by email.
+		self.set_onload("existing_employee", self.find_existing_employee())
+
+	# The employee record with the same email as the registration that has no other login yet.
+	def find_existing_employee(self):
+		# No email, nothing to match.
+		if not self.email:
+			# No match.
+			return None
+		# Employees with this email, ignoring capitals.
+		matches = frappe.db.sql(
+			"""
+			select name from `tabMVM Employee`
+			where lower(email) = lower(%s) and (ifnull(user, '') = '' or user = %s)
+			order by inactive, name
+			""",
+			(self.email, self.user),
+		)
+		# The first match, or None.
+		return matches[0][0] if matches else None
 
 	# Only an admin or a team manager may decide, and only once.
 	def check_can_decide(self):
@@ -46,11 +75,22 @@ class MVMRegistration(Document):
 
 	# Approve: the login becomes a normal user and gets an employee record.
 	# `employee` links an existing employee; without it a new employee is created.
-	# `zones` (list of zone names) and `reporting_to` (the manager) are set on the employee when given.
+	# `reporting_to` (the manager) is set on the employee when given; `zones` are kept as they are unless given.
+	# `role`: "Employee", "Manager" or "Admin"; only admins may give Manager or Admin.
 	@frappe.whitelist()
-	def approve(self, employee=None, zones=None, reporting_to=None):
+	def approve(self, employee=None, zones=None, reporting_to=None, role="Employee"):
 		# Only an approver, and only while pending.
 		self.check_can_decide()
+		# An unknown choice.
+		if role not in ROLE_CHOICES:
+			# Stop with a message.
+			frappe.throw(_("Choose Employee, Manager or Admin."))
+		# A manager may only approve employees.
+		if role != "Employee" and not is_manager():
+			# Stop with a message.
+			frappe.throw(_("Only an administrator can make someone a Manager or an Admin."), frappe.PermissionError)
+		# Nobody chosen: the existing employee with the same email, if there is one.
+		employee = employee or self.find_existing_employee()
 
 		# The login of the registration.
 		user = frappe.get_doc("User", self.user)
@@ -60,10 +100,12 @@ class MVMRegistration(Document):
 		user.enabled = 1
 		# Roles the login has now.
 		roles = [row.role for row in user.roles]
-		# The field staff role is missing.
-		if APPROVED_ROLE not in roles:
-			# Add it.
-			user.append("roles", {"role": APPROVED_ROLE})
+		# Every role of the chosen kind (Employee, Manager or Admin).
+		for new_role in ROLE_CHOICES[role]:
+			# Only the ones that are missing.
+			if new_role not in roles:
+				# Add it.
+				user.append("roles", {"role": new_role})
 		# Managers may not edit users themselves; this one change is checked above.
 		user.save(ignore_permissions=True)
 

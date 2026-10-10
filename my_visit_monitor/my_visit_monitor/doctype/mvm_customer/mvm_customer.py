@@ -3,13 +3,17 @@
 # File: mvm_customer.py
 # Purpose: Customer master.
 # Created: 2026-10-05
-# Last updated: 2026-10-07
+# Last updated: 2026-10-10
 
+# Frappe framework.
+import frappe
 # Base class of every DocType controller.
 from frappe.model.document import Document
 
 # Helpers that build and protect the A00001 style code.
 from my_visit_monitor.utils import next_letter_code, validate_code_letter
+# Employee of the logged-in user.
+from my_visit_monitor.permission import get_current_employee
 
 
 # Controller of MVM Customer.
@@ -18,6 +22,17 @@ class MVMCustomer(Document):
 	def autoname(self):
 		# Set the customer code.
 		self.name = next_letter_code(self.doctype, self.company_name)
+
+	# Followed By and Reporting To default to the employee and their manager (employees cannot pick other employees).
+	def before_validate(self):
+		# Nobody chosen as follower.
+		if not self.followed_by:
+			# The employee of the logged-in user.
+			self.followed_by = get_current_employee()
+		# No manager chosen, but a follower is known.
+		if not self.reporting_to and self.followed_by:
+			# The follower's manager.
+			self.reporting_to = frappe.db.get_value("MVM Employee", self.followed_by, "reporting_to")
 
 	# The company name must keep the first letter the code was made from.
 	def validate(self):
