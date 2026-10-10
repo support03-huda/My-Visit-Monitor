@@ -519,43 +519,6 @@ frappe.pages["mvm-dashboard"].on_page_load = function (wrapper) {
 			</div>`;
 	}
 
-	// Allocated customers the employee did not visit in the period.
-	function render_not_visited(data) {
-		// Nothing to show when every allocated customer was visited.
-		if (!data.not_visited_count) return "";
-		// One row per customer.
-		const rows = data.not_visited
-			.map(
-				(customer) => `<tr>
-					<td><a href="/app/mvm-customer/${encodeURIComponent(customer.name)}">${frappe.utils.escape_html(customer.company_name || customer.name)}</a></td>
-					<td>${frappe.utils.escape_html(customer.city || "")}</td>
-					<td>${frappe.utils.escape_html(customer.zone || "")}</td>
-					<td>${customer.last_visit ? frappe.datetime.str_to_user(customer.last_visit) : __("Never")}</td>
-				</tr>`
-			)
-			.join("");
-		// Note when the list was cut short.
-		const more =
-			data.not_visited_count > data.not_visited.length
-				? `<div class="text-muted">${__("Showing the first {0}.", [data.not_visited.length])}</div>`
-				: "";
-		// Heading with the number of customers, and the table.
-		return `${mvm_heading(__("Allocated Customers Not Visited ({0})", [data.not_visited_count]), "customers-not-visited")}
-			<div class="mvm-table-wrap">
-				<table class="table table-bordered mvm-table">
-					<thead>
-						<tr>
-							<th>${__("Customer")}</th>
-							<th>${__("City")}</th>
-							<th>${__("Zone")}</th>
-							<th>${__("Last Visit")}</th>
-						</tr>
-					</thead>
-					<tbody>${rows}</tbody>
-				</table>
-			</div>${more}`;
-	}
-
 	// Comparison of all employees for the period (managers only).
 	function render_team(data) {
 		// Field staff get no comparison.
@@ -686,12 +649,11 @@ frappe.pages["mvm-dashboard"].on_page_load = function (wrapper) {
 			["overview", __("Overview"), `<div class="mvm-charts">${render_trend(data, period)}${render_reasons(data)}</div>`],
 			// Calendar and daily list, or one line per month.
 			["attendance", __("Attendance"), detail],
-			// Customers visited most and allocated customers not visited.
+			// Customers visited most.
 			[
 				"customers",
 				__("Customers"),
-				(data.employee ? render_top_customers(data.top_customers || [], __("Top 10 Customers"), "top-customers", false) : "") +
-					render_not_visited(data),
+				data.employee ? render_top_customers(data.top_customers || [], __("Top 10 Customers"), "top-customers", false) : "",
 			],
 		];
 		// Managers get one more tab with all employees.

@@ -167,8 +167,6 @@ def check_out_visit(visit, latitude=None, longitude=None, accuracy=None):
 DASHBOARD_MAX_DAYS = 366
 # Months shown in the visits-per-month chart.
 DASHBOARD_TREND_MONTHS = 12
-# Most customers listed under "not visited".
-DASHBOARD_MISSED_LIMIT = 100
 # Number of rows in a "top" list.
 DASHBOARD_TOP_LIMIT = 10
 
@@ -348,8 +346,8 @@ def performance(start, end, employee=None):
 def employee_dashboard(employee, start, end):
 	# Work figures of the employee.
 	summary = performance(start, end, employee)[employee]
-	# Allocated customers that were not visited; taken out because a set cannot be sent to the page.
-	missed = summary.pop("missed")
+	# The set of missed customers is not shown and cannot be sent to the page.
+	summary.pop("missed")
 	# Values for the queries.
 	values = {"employee": employee, "start": start, "end": end}
 
@@ -452,32 +450,6 @@ def employee_dashboard(employee, start, end):
 		values,
 	)[0][0]
 
-	# Allocated customers without a visit in the period.
-	not_visited = []
-	# Only look them up when there are any.
-	if missed:
-		# Customer -> date of the last visit by this employee, ever.
-		last_visits = dict(
-			frappe.db.sql(
-				"select customer, max(checkin_date) from `tabMVM Visit Entry` where employee = %s group by customer",
-				employee,
-			)
-		)
-		# Name, city and zone of those customers.
-		rows = frappe.get_all(
-			"MVM Customer",
-			filters={"name": ["in", list(missed)]},
-			fields=["name", "company_name", "city", "zone"],
-		)
-		# Add the last visit to every customer.
-		for row in rows:
-			# Date as text; empty when the employee never visited the customer.
-			row["last_visit"] = str(last_visits.get(row.name) or "")
-		# Never visited first, then the longest ago.
-		rows.sort(key=lambda row: (row.last_visit, row.company_name or ""))
-		# The page shows only the first ones.
-		not_visited = rows[:DASHBOARD_MISSED_LIMIT]
-
 	# Everything about the employee.
 	return {
 		"summary": summary,
@@ -487,8 +459,6 @@ def employee_dashboard(employee, start, end):
 		"new_customers": new_customers,
 		# The customers this employee visited most.
 		"top_customers": top_customers(start, end, employee),
-		"not_visited": not_visited,
-		"not_visited_count": len(missed),
 	}
 
 
