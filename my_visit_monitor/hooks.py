@@ -1,7 +1,7 @@
 # File: hooks.py
-# Purpose: Frappe hooks of the app. Only the permission hooks are in use.
+# Purpose: Frappe hooks of the app: permission rules and the approval of self-registered logins.
 # Created: 2026-10-05
-# Last updated: 2026-10-07
+# Last updated: 2026-10-10
 
 app_name = "my_visit_monitor"
 app_title = "My Visit Monitor"
@@ -152,6 +152,16 @@ has_permission = {
 # Document Events
 # ---------------
 # Hook on document methods and events
+
+# A login made through Sign Up gets a registration that waits for an administrator.
+doc_events = {
+	"User": {
+		"after_insert": "my_visit_monitor.registration.on_user_insert",
+	},
+}
+
+# A self-registered login can only log in after it was approved.
+on_login = "my_visit_monitor.registration.check_approval"
 
 # doc_events = {
 # 	"*": {

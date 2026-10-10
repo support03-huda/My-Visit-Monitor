@@ -1,7 +1,7 @@
 # File: utils.py
 # Purpose: Shared helpers: settings, master codes (A00001), distance and address lookup.
 # Created: 2026-10-05
-# Last updated: 2026-10-07
+# Last updated: 2026-10-10
 
 # Trigonometry for the distance.
 import math
@@ -107,12 +107,35 @@ def distance_in_metres(lat1, lon1, lat2, lon2):
 	return 6371000 * 2 * math.asin(math.sqrt(a))
 
 
+# How exact a Google answer is, best first (Google's location_type).
+GEOCODE_PRECISION = ["ROOFTOP", "RANGE_INTERPOLATED", "GEOMETRIC_CENTER", "APPROXIMATE"]
+
+
 # Position of an address, from Google.
-def geocode_address(address):
+def geocode_address(address, alternative=None):
 	"""Return (latitude, longitude) of `address` from Google Geocoding, or None.
 
+	`address` should hold only the address. With names in it Google sometimes picks another building with a
+	similar name. When the address alone only gives a rough point, `alternative` (for example the address with
+	the company name) is tried as well and the more exact answer is used.
 	Never raises: a failed lookup must not block a check-in.
 	"""
+	# Answer for the address alone.
+	best = geocode_lookup(address)
+	# No exact point for the address alone, and something else may be tried.
+	if alternative and (not best or best["precision"] > 0):
+		# Answer for the alternative text.
+		other = geocode_lookup(alternative)
+		# Keep it when it is more exact.
+		if other and (not best or other["precision"] < best["precision"]):
+			# Use the alternative.
+			best = other
+	# Latitude and longitude, or None when Google found nothing.
+	return (best["latitude"], best["longitude"]) if best else None
+
+
+# One Google lookup: latitude, longitude and how exact the point is (0 = rooftop ... 4 = unknown), or None.
+def geocode_lookup(address):
 	# Google Maps API key from MVM Settings.
 	api_key = get_settings().get_password("google_maps_api_key", raise_exception=False)
 	# No key or no address.
@@ -143,10 +166,14 @@ def geocode_address(address):
 				frappe.log_error(title="MVM geocoding failed", message=frappe.as_json(data))
 			# No position.
 			return None
-		# Position of the first result.
-		location = data["results"][0]["geometry"]["location"]
-		# Latitude and longitude as numbers.
-		return flt(location["lat"]), flt(location["lng"])
+		# Point of the first result.
+		geometry = data["results"][0]["geometry"]
+		# How exact it is; an unknown kind counts as the least exact.
+		kind = geometry.get("location_type")
+		# Position in the list above.
+		precision = GEOCODE_PRECISION.index(kind) if kind in GEOCODE_PRECISION else len(GEOCODE_PRECISION)
+		# Latitude and longitude as numbers, with how exact they are.
+		return {"latitude": flt(geometry["location"]["lat"]), "longitude": flt(geometry["location"]["lng"]), "precision": precision}
 	# Network error, timeout or unexpected answer.
 	except Exception:
 		# Record the error in the Error Log.

@@ -4,7 +4,7 @@
 # Purpose: Visit entry: check-in, check-out, the comparison with the customer location, and the manager
 #          action that makes a check-in position the customer location.
 # Created: 2026-10-05
-# Last updated: 2026-10-09
+# Last updated: 2026-10-10
 
 # Frappe framework.
 import frappe
@@ -113,12 +113,14 @@ class MVMVisitEntry(Document):
 
 	# Position of the customer: the one set on the customer, else its address looked up.
 	def set_customer_location(self):
-		# Name and address of the customer, for the address lookup.
-		customer = frappe.db.get_value(
+		# Company name and address of the customer, for the address lookup.
+		company, *address = frappe.db.get_value(
 			"MVM Customer",
 			self.customer,
-			["customer_name", "company_name", "address_line_1", "address_line_2", "address_line_3", "city", "pincode", "state", "country"],
+			["company_name", "address_line_1", "address_line_2", "address_line_3", "city", "pincode", "state", "country"],
 		)
+		# The address alone, e.g. "O-16, Bramha Aangan Commercial Complex, Kondhwa, Pune, 411048, ...".
+		address = ", ".join(cstr(part).strip(" ,") for part in address if cstr(part).strip(" ,"))
 		# Position set on the customer.
 		latitude, longitude = frappe.db.get_value("MVM Customer", self.customer, ["latitude", "longitude"])
 		# The customer has a position.
@@ -127,8 +129,9 @@ class MVMVisitEntry(Document):
 			location = (latitude, longitude)
 		# The customer has no position.
 		else:
-			# Look up the address; None when that fails.
-			location = geocode_address(", ".join(cstr(part) for part in customer if part))
+			# Look up the address alone; with the names in it Google matched a building with a similar name
+			# 800 m away (Kondhwa). The company name is only tried when the address alone gives a rough point.
+			location = geocode_address(address, f"{company}, {address}" if company else None)
 		# A position was found.
 		if location:
 			# Store it on the visit.
