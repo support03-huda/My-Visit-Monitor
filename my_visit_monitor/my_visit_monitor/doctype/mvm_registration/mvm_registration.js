@@ -35,10 +35,13 @@ function approve_registration(frm) {
 			},
 			{
 				fieldname: "zones",
-				fieldtype: "Table MultiSelect",
-				options: "MVM Employee Zone",
+				// A plain list of zone names; a "Table MultiSelect" fails in a dialog because the child table
+				// is not loaded there, which made the Approve button do nothing.
+				fieldtype: "MultiSelectList",
 				label: __("Zones"),
 				description: __("Zones this person works in; their customers are shown to them."),
+				// Zones matching what is typed, from the zone master.
+				get_data: (text) => frappe.db.get_link_options("MVM Zone", text),
 			},
 			{
 				fieldname: "reporting_to",
@@ -51,8 +54,8 @@ function approve_registration(frm) {
 		],
 		// The approver pressed Approve.
 		(values) => {
-			// Zone names out of the multi-select rows.
-			const zones = (values.zones || []).map((row) => row.zone).filter(Boolean);
+			// Chosen zone names.
+			const zones = (values.zones || []).filter(Boolean);
 			// Approve on the server.
 			frm.call("approve", {
 				employee: values.employee || null,
