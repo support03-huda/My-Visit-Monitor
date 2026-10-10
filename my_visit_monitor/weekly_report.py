@@ -2,6 +2,7 @@
 # Purpose: Weekly email report of the employees' visits: managers get their team, admins get everybody.
 #          Sent every Monday morning for the previous Monday to Sunday (hooks.py scheduler_events),
 #          only when "Send Weekly Report" is ticked in MVM Settings.
+#          Summary boxes, points that need attention, and per employee every customer visited (no attachment).
 # Created: 2026-10-10
 # Last updated: 2026-10-10
 
@@ -18,20 +19,6 @@ from my_visit_monitor.api import count_working_days, performance
 from my_visit_monitor.permission import MANAGER_ROLES, get_team, is_manager
 # Whether an outgoing email account is set up.
 from my_visit_monitor.my_visit_monitor.doctype.mvm_registration.mvm_registration import has_outgoing_email
-
-# Customers named per employee in the report.
-TOP_CUSTOMERS_PER_EMPLOYEE = 3
-# Column headings of the report table (also the first row of the Excel file).
-HEADINGS = [
-	"Employee",
-	"Code",
-	"Days Worked (Mon-Fri)",
-	"Visits",
-	"Customers",
-	"Not Checked Out",
-	"Outside Geofence",
-	"Top Customers",
-]
 
 
 # Scheduler entry point (Monday morning): send the report of last week when it is switched on.
@@ -140,25 +127,17 @@ def recipients():
 def send_report(email, start, end, members):
 	# Employee rows of the report.
 	rows = report_rows(start, end, members)
-	# "6 Oct - 12 Oct 2026"
+	# "5 Oct - 11 Oct 2026"
 	period = f"{formatdate(start, 'd MMM')} - {formatdate(end, 'd MMM yyyy')}"
-	# Subject line.
-	subject = _("Weekly Visit Report: {0}").format(period)
-	# Excel file with the same table.
-	from frappe.utils.xlsxutils import make_xlsx
-
-	# Heading row first, then the employees.
-	xlsx = make_xlsx([HEADINGS, *rows], "Weekly Report").getvalue()
-	# Queue the email with the table and the Excel attachment.
+	# Queue the email; the report is in the body, no attachment.
 	frappe.sendmail(
 		recipients=[email],
-		subject=subject,
+		subject=_("Weekly Visit Report: {0}").format(period),
 		message=report_html(period, rows, start, end, members is None),
-		attachments=[{"fname": f"weekly-visit-report_{start}_{end}.xlsx", "fcontent": xlsx}],
 	)
 
 
-# One row per employee: name, code, days worked, visits, customers, open visits, outside geofence, top customers.
+# One dict per employee: name, manager, attendance, visits, every customer visited, open and outside visits.
 def report_rows(start, end, members):
 	# Visits, days worked and customers per employee.
 	figures = performance(start, end)
@@ -168,7 +147,7 @@ def report_rows(start, end, members):
 	if members is None:
 		# Add them.
 		codes = list(dict.fromkeys([*codes, *[code for code, item in figures.items() if item["visits"]]]))
-	# Values for the queries.
+	# Values for the queries; an empty group gets a code that cannot exist.
 	values = {"start": start, "end": end, "codes": tuple(codes or [""])}
 	# Employee -> visits still checked in, and visits outside the geofence.
 	counts = {
@@ -186,25 +165,45 @@ def report_rows(start, end, members):
 			as_dict=True,
 		)
 	}
-	# Employee -> customers with the most visits that week.
-	top = {}
-	# Visits per employee and customer, most first.
+	# Employee -> customers visited that week: [(name, visits)], most visits first.
+	customers = {}
+	# Visits per employee and customer.
 	for code, name, visits in frappe.db.sql(
 		"""
 		select employee, max(ifnull(nullif(customer_name, ''), customer)), count(*) as visits
 		from `tabMVM Visit Entry`
 		where checkin_date between %(start)s and %(end)s and employee in %(codes)s and ifnull(customer, '') != ''
 		group by employee, customer
-		order by employee, visits desc
+		order by employee, visits desc, 2
 		""",
 		values,
 	):
-		# The first few customers of each employee.
-		if len(top.setdefault(code, [])) < TOP_CUSTOMERS_PER_EMPLOYEE:
-			# "BHARAT FORGE LTD (3)"
-			top[code].append(f"{name} ({visits})")
-	# Code -> name of the employees.
-	names = dict(frappe.get_all("MVM Employee", filters={"name": ["in", codes or [""]]}, fields=["name", "employee_name"], as_list=True))
+		# Add the customer to that employee's list.
+		customers.setdefault(code, []).append((cstr(name), cint(visits)))
+	# Employee -> names of the customers that employee visited for the first time ever this week.
+	new_customers = {}
+	# First visit per employee and customer, only those that fall in the week.
+	for code, name in frappe.db.sql(
+		"""
+		select employee, max(ifnull(nullif(customer_name, ''), customer))
+		from `tabMVM Visit Entry`
+		where employee in %(codes)s and ifnull(customer, '') != ''
+		group by employee, customer
+		having min(checkin_date) between %(start)s and %(end)s
+		""",
+		values,
+	):
+		# Remember the name.
+		new_customers.setdefault(code, set()).add(cstr(name))
+	# Code -> name and manager of the employees in the report.
+	employees = {
+		row.name: row
+		for row in frappe.get_all(
+			"MVM Employee", filters={"name": ["in", codes or [""]]}, fields=["name", "employee_name", "reporting_to"]
+		)
+	}
+	# Code -> name of every employee, for the manager's name.
+	names = dict(frappe.get_all("MVM Employee", fields=["name", "employee_name"], as_list=True))
 	# Rows of the report.
 	rows = []
 	# Every employee.
@@ -213,57 +212,191 @@ def report_rows(start, end, members):
 		item = figures.get(code) or {}
 		# Open and outside counts of that employee.
 		extra = counts.get(code) or {}
+		# Employee record (name and manager).
+		employee = employees.get(code) or frappe._dict()
 		# One row.
 		rows.append(
-			[
-				names.get(code) or code,
-				code,
-				cint(item.get("weekdays_worked")),
-				cint(item.get("visits")),
-				cint(item.get("customers")),
-				cint(extra.get("open_visits")),
-				cint(extra.get("outside")),
-				", ".join(top.get(code, [])),
-			]
+			frappe._dict(
+				code=code,
+				name=employee.employee_name or code,
+				# The manager's name; empty for someone who reports to nobody or to themselves.
+				manager=names.get(employee.reporting_to) if employee.reporting_to not in (None, "", code) else "",
+				days=cint(item.get("weekdays_worked")),
+				visits=cint(item.get("visits")),
+				customers=customers.get(code, []),
+				new_customers=new_customers.get(code, set()),
+				open_visits=cint(extra.get("open_visits")),
+				outside=cint(extra.get("outside")),
+			)
 		)
 	# Most visits first, then by name.
-	rows.sort(key=lambda row: (-row[3], row[0]))
+	rows.sort(key=lambda row: (-row.visits, row.name))
 	# Rows of the report.
 	return rows
 
 
-# The email body: a short summary and the table.
+# -- email layout (inline styles: email programs ignore style sheets)
+
+# Colours of the email.
+BLUE, GREEN, RED, AMBER, GREY, LINE = "#1f4e79", "#2f9e44", "#e03131", "#e67700", "#6b7280", "#e5e7eb"
+# Style of a table cell.
+CELL = f"padding:10px 12px;border-bottom:1px solid {LINE};vertical-align:top;font-size:13px"
+
+
+# A number box of the summary row.
+def tile(label, value, colour=BLUE):
+	# Big number with a small label under it.
+	return (
+		f'<td style="padding:6px"><div style="border:1px solid {LINE};border-radius:8px;padding:12px;text-align:center;background:#fafafa">'
+		f'<div style="font-size:24px;font-weight:bold;color:{colour}">{value}</div>'
+		f'<div style="font-size:12px;color:{GREY};margin-top:2px">{escape_html(label)}</div></div></td>'
+	)
+
+
+# A number that turns red when it is not zero.
+def flag(value, colour=RED):
+	# Zero in grey, anything else bold and coloured.
+	return f'<span style="color:{colour};font-weight:bold">{value}</span>' if value else f'<span style="color:{GREY}">0</span>'
+
+
+# The email body: heading, summary boxes, points that need attention, and one line per employee.
 def report_html(period, rows, start, end, everybody):
 	# Mon to Fri in the week.
 	working_days = count_working_days(start, end)
-	# Totals over all employees.
-	total_visits = sum(row[3] for row in rows)
-	# Employees without a single visit.
-	idle = [row[0] for row in rows if not row[3]]
-	# Table cells; numbers aligned right.
-	body = "".join(
-		"<tr>"
-		+ "".join(
-			f'<td style="border:1px solid #ccc;padding:4px 8px;{"text-align:right;" if isinstance(cell, int) else ""}">{escape_html(cstr(cell))}</td>'
-			for cell in row
-		)
-		+ "</tr>"
-		for row in rows
+	# Employees with at least one visit.
+	active = [row for row in rows if row.visits]
+	# Every customer visited by anybody in the report.
+	all_customers = {name for row in rows for name, visits in row.customers}
+	# Total visits.
+	total_visits = sum(row.visits for row in rows)
+	# Visits not checked out.
+	total_open = sum(row.open_visits for row in rows)
+	# Visits outside the geofence.
+	total_outside = sum(row.outside for row in rows)
+	# Customers visited for the first time.
+	total_new = sum(len(row.new_customers) for row in rows)
+
+	# Summary boxes.
+	tiles = "".join(
+		[
+			tile(_("Total Visits"), total_visits),
+			tile(_("Customers Visited"), len(all_customers)),
+			tile(_("New Customers"), total_new, GREEN),
+			tile(_("Employees Active"), f"{len(active)}/{len(rows)}"),
+			tile(_("Not Checked Out"), total_open, RED if total_open else GREY),
+			tile(_("Outside Geofence"), total_outside, RED if total_outside else GREY),
+		]
 	)
-	# Heading cells.
-	head = "".join(f'<th style="border:1px solid #ccc;padding:4px 8px;background:#f3f3f3;text-align:left">{_(h)}</th>' for h in HEADINGS)
+
+	# Points that need attention.
+	points = []
+	# Employees without a single visit.
+	idle = [row.name for row in rows if not row.visits]
+	# Some had none.
+	if idle:
+		# Name them.
+		points.append(_("No visits this week: {0}").format(", ".join(idle)))
+	# Employees who worked on fewer than half of the working days.
+	low = [f"{row.name} ({row.days}/{working_days})" for row in active if row.days * 2 < working_days]
+	# Some did.
+	if low:
+		# Name them.
+		points.append(_("Worked on fewer than half of the working days: {0}").format(", ".join(low)))
+	# Visits left open.
+	opened = [f"{row.name} ({row.open_visits})" for row in rows if row.open_visits]
+	# Some are.
+	if opened:
+		# Name them.
+		points.append(_("Visits not checked out: {0}").format(", ".join(opened)))
+	# Visits away from the customer.
+	away = [f"{row.name} ({row.outside})" for row in rows if row.outside]
+	# Some are.
+	if away:
+		# Name them.
+		points.append(_("Check-in or check-out outside the geofence: {0}").format(", ".join(away)))
+	# The attention box, or a short all-good line.
+	if points:
+		# Amber box with one line per point.
+		attention = (
+			f'<div style="background:#fff8e6;border:1px solid #f5d38a;border-radius:8px;padding:12px 16px;margin:16px 0">'
+			f'<div style="font-weight:bold;color:{AMBER};margin-bottom:6px">{_("Needs attention")}</div>'
+			+ "".join(f'<div style="font-size:13px;margin:4px 0">&bull; {escape_html(point)}</div>' for point in points)
+			+ "</div>"
+		)
+	# Nothing to point out.
+	else:
+		# Green line.
+		attention = (
+			f'<div style="background:#ebfbee;border:1px solid #b2f2bb;border-radius:8px;padding:12px 16px;margin:16px 0;color:{GREEN}">'
+			f'{_("Everybody worked, and all visits were checked out and inside the geofence.")}</div>'
+		)
+
+	# One table line per employee.
+	lines = []
+	# Every employee.
+	for row in rows:
+		# Attendance as a share of the working days.
+		percent = round(row.days * 100 / working_days) if working_days else 0
+		# Green from 80 %, amber from 50 %, else red.
+		colour = GREEN if percent >= 80 else AMBER if percent >= 50 else RED
+		# Every customer, with its number of visits when more than one, and "NEW" for a first visit.
+		names = "<br>".join(
+			escape_html(name)
+			+ (f' <span style="color:{GREY}">({visits})</span>' if visits > 1 else "")
+			+ (
+				f' <span style="background:{GREEN};color:#fff;border-radius:4px;padding:0 4px;font-size:10px">{_("NEW")}</span>'
+				if name in row.new_customers
+				else ""
+			)
+			for name, visits in row.customers
+		) or f'<span style="color:{GREY}">-</span>'
+		# Manager under the name, in the admins' report where all teams are listed.
+		manager = (
+			f'<div style="color:{GREY};font-size:11px">{_("Reports to")} {escape_html(row.manager)}</div>'
+			if everybody and row.manager
+			else ""
+		)
+		# The line.
+		lines.append(
+			f"""<tr>
+				<td style="{CELL}"><b>{escape_html(row.name)}</b> <span style="color:{GREY};font-size:11px">{escape_html(row.code)}</span>{manager}</td>
+				<td style="{CELL};text-align:center"><span style="color:{colour};font-weight:bold">{row.days}/{working_days}</span><div style="color:{GREY};font-size:11px">{percent}%</div></td>
+				<td style="{CELL};text-align:center;font-weight:bold">{row.visits}</td>
+				<td style="{CELL}"><div style="font-weight:bold;margin-bottom:4px">{len(row.customers)}</div>{names}</td>
+				<td style="{CELL};text-align:center">{flag(row.open_visits)}</td>
+				<td style="{CELL};text-align:center">{flag(row.outside)}</td>
+			</tr>"""
+		)
+	# Heading cells of the table.
+	head = "".join(
+		f'<th style="padding:10px 12px;background:{BLUE};color:#fff;font-size:12px;text-align:{align}">{_(label)}</th>'
+		for label, align in [
+			("Employee", "left"),
+			("Days Worked", "center"),
+			("Visits", "center"),
+			("Customers Visited", "left"),
+			("Not Checked Out", "center"),
+			("Outside Geofence", "center"),
+		]
+	)
 	# Who the report covers.
-	scope = _("all employees") if everybody else _("your team")
-	# Employees with no visits, when there are any.
-	idle_line = f"<p><b>{_('No visits')}:</b> {escape_html(', '.join(idle))}</p>" if idle else ""
+	scope = _("All employees") if everybody else _("Your team")
+
 	# The whole message.
 	return f"""
-		<p>{_("Visit report of {0} for {1}.").format(scope, escape_html(period))}</p>
-		<p>{_("Working days (Mon-Fri)")}: <b>{working_days}</b> &nbsp; {_("Total visits")}: <b>{total_visits}</b></p>
-		{idle_line}
-		<table style="border-collapse:collapse;font-size:13px">
+	<div style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:900px">
+		<div style="background:{BLUE};color:#fff;border-radius:8px 8px 0 0;padding:16px 20px">
+			<div style="font-size:20px;font-weight:bold">{_("Weekly Visit Report")}</div>
+			<div style="font-size:13px;margin-top:4px">{escape_html(period)} &middot; {scope} &middot; {_("{0} working days (Mon-Fri)").format(working_days)}</div>
+		</div>
+		<table style="width:100%;border-collapse:collapse;margin-top:8px"><tr>{tiles}</tr></table>
+		{attention}
+		<table style="width:100%;border-collapse:collapse;border:1px solid {LINE}">
 			<thead><tr>{head}</tr></thead>
-			<tbody>{body}</tbody>
+			<tbody>{"".join(lines)}</tbody>
 		</table>
-		<p style="color:#888;font-size:12px">{_("The same table is attached as an Excel file. Not Checked Out: visits of the week that are still checked in. Outside Geofence: check-in or check-out farther from the customer than the geofence radius.")}</p>
+		<p style="color:{GREY};font-size:11px;margin-top:12px">
+			{_("Days Worked: days from Monday to Friday with at least one visit. (2) after a customer: number of visits. NEW: first visit ever by this employee. Not Checked Out: visits of the week still checked in. Outside Geofence: check-in or check-out farther from the customer than the geofence radius.")}
+		</p>
+	</div>
 	"""
