@@ -1,14 +1,22 @@
 // Copyright (c) 2026, huda and contributors
 // For license information, please see license.txt
 // File: mvm_settings.js
-// Purpose: Settings form: the Import Old Database button.
+// Purpose: Settings form: the Import Old Database and Send Test Weekly Report buttons.
 // Created: 2026-10-07
-// Last updated: 2026-10-07
+// Last updated: 2026-10-10
 
 // Events of the settings form.
 frappe.ui.form.on("MVM Settings", {
 	// System Managers can import the old MyVisitMonitor database from a .sql dump.
 	refresh(frm) {
+		// Admins can mail themselves last week's report to see what managers will get.
+		frm.add_custom_button(__("Send Test Weekly Report"), () => {
+			// Build and queue the report on the server.
+			frappe.call({ method: "my_visit_monitor.weekly_report.send_test_report", freeze: true }).then((r) => {
+				// Tell where it went.
+				frappe.msgprint(__("Last week's report was sent to {0}.", [r.message]));
+			});
+		});
 		// Only a System Manager gets the button.
 		if (!frappe.user.has_role("System Manager")) return;
 

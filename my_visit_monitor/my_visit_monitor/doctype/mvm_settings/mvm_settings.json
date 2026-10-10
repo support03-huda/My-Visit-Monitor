@@ -8,7 +8,9 @@
   "require_location",
   "geofence_radius",
   "column_break_main",
-  "google_maps_api_key"
+  "google_maps_api_key",
+  "section_weekly_report",
+  "weekly_report_enabled"
  ],
  "fields": [
   {
@@ -43,11 +45,23 @@
    "fieldname": "google_maps_api_key",
    "fieldtype": "Password",
    "label": "Google Maps API Key"
+  },
+  {
+   "fieldname": "section_weekly_report",
+   "fieldtype": "Section Break",
+   "label": "Weekly Report"
+  },
+  {
+   "default": "0",
+   "description": "Every Monday at 9:00 email last week's visit report: managers get their team, admins get all employees. Leave off on test sites.",
+   "fieldname": "weekly_report_enabled",
+   "fieldtype": "Check",
+   "label": "Send Weekly Report"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-09 16:00:00.000000",
+ "modified": "2026-10-10 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Settings",

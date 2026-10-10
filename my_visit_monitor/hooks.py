@@ -186,6 +186,14 @@ on_login = "my_visit_monitor.registration.check_approval"
 # Scheduled Tasks
 # ---------------
 
+# Jobs that run on a timetable.
+scheduler_events = {
+	"cron": {
+		# Every Monday at 9:00: last week's visit report to managers and admins (when switched on in MVM Settings).
+		"0 9 * * 1": ["my_visit_monitor.weekly_report.send_weekly_reports"],
+	},
+}
+
 # scheduler_events = {
 # 	"all": [
 # 		"my_visit_monitor.tasks.all"
