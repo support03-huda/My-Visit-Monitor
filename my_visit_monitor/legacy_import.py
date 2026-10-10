@@ -463,7 +463,7 @@ class LegacyImporter:
 		# Renumbering: move the visits made here, then add the old visits under their own numbers.
 		if self.waiting:
 			# Highest number in use: the site's counter or the last old visit.
-			current = max(cint(frappe.db.get_value("Series", VISIT_SERIES, "current")), last_number)
+			current = max(series_current(), last_number)
 			# Every old visit whose number was taken.
 			for number, row, values in self.waiting:
 				# Next free running number.
@@ -523,7 +523,7 @@ class LegacyImporter:
 		# A merge never lowers the counter: visits made here may have used higher numbers.
 		if self.merge:
 			# Current counter of this site.
-			current = frappe.db.get_value("Series", VISIT_SERIES, "current") or 0
+			current = series_current()
 			# Keep the higher one.
 			last_number = max(cint(current), cint(last_number))
 		# The old app kept its own counter table.
@@ -540,6 +540,15 @@ class LegacyImporter:
 		if company_id:
 			# Use the same company id for new visits.
 			frappe.db.set_single_value("MVM Settings", "company_id", company_id)
+
+
+# Current value of the visit counter; 0 when there is none.
+def series_current():
+	"""Plain SQL: tabSeries has no creation column, which get_value orders by."""
+	# The counter row.
+	rows = frappe.db.sql("select current from `tabSeries` where name = %s", VISIT_SERIES)
+	# Its value, or 0.
+	return cint(rows[0][0]) if rows else 0
 
 
 # The three address lines of an old row.
