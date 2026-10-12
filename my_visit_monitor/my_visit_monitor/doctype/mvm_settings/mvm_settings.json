@@ -10,7 +10,8 @@
   "column_break_main",
   "google_maps_api_key",
   "section_weekly_report",
-  "weekly_report_enabled"
+  "weekly_report_enabled",
+  "weekly_report_all_recipients"
  ],
  "fields": [
   {
@@ -53,15 +54,21 @@
   },
   {
    "default": "0",
-   "description": "Every Monday at 9:00 email last week's visit report: managers get their team, admins get all employees. Leave off on test sites.",
+   "description": "Every Monday at 9:00 email last week's visit report: every employee gets their own visits, managers get their team. Leave off on test sites.",
    "fieldname": "weekly_report_enabled",
    "fieldtype": "Check",
    "label": "Send Weekly Report"
+  },
+  {
+   "description": "Email addresses that get the report of all employees, separated by commas. Leave empty to send it to every administrator.",
+   "fieldname": "weekly_report_all_recipients",
+   "fieldtype": "Small Text",
+   "label": "Send All Employees Report To"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-10 21:00:00.000000",
+ "modified": "2026-10-12 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Settings",

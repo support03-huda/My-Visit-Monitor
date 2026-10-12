@@ -2,8 +2,9 @@
 // For license information, please see license.txt
 // File: mvm_registration.js
 // Purpose: Registration form: Approve (employee, manager, role) and Reject buttons for admins and managers.
+//          For an existing employee the dialog is filled in from the employee record.
 // Created: 2026-10-10
-// Last updated: 2026-10-10
+// Last updated: 2026-10-12
 
 // Events of the registration form.
 frappe.ui.form.on("MVM Registration", {
@@ -23,8 +24,12 @@ frappe.ui.form.on("MVM Registration", {
 function approve_registration(frm) {
 	// What the server worked out for this registration.
 	const onload = frm.doc.__onload || {};
+	// The employee record found by email: its manager, role and zones are the defaults of the dialog.
+	const existing = onload.existing_details || {};
+	// The dialog, once it is open (the employee field needs it when another employee is chosen).
+	let dialog = null;
 	// Ask which employee this person is, who their manager is and what they become.
-	frappe.prompt(
+	dialog = frappe.prompt(
 		[
 			{
 				fieldname: "employee",
@@ -38,6 +43,28 @@ function approve_registration(frm) {
 					: __("No employee with this email. Leave empty to create a new employee for {0}.", [
 							frappe.utils.escape_html(frm.doc.full_name || frm.doc.email),
 					  ]),
+				// Another employee was chosen: fill the dialog in from that record.
+				onchange() {
+					// While the dialog is being built there is nothing to update yet.
+					if (!dialog) return;
+					// The employee chosen now.
+					const employee = dialog.get_value("employee") || null;
+					// The same one as shown already (the field also fires when it is only left).
+					if (employee === dialog.shown_employee) return;
+					// Remember it.
+					dialog.shown_employee = employee;
+					// Manager, role and zones of the chosen employee.
+					frm.call("employee_details", { employee }).then((r) => {
+						// Put them into the dialog.
+						fill_from_employee(dialog, r.message, onload);
+					});
+				},
+			},
+			{
+				// What the employee record says, so the approver sees it before approving.
+				fieldname: "details",
+				fieldtype: "HTML",
+				options: employee_summary(existing),
 			},
 			{
 				fieldname: "role",
@@ -45,7 +72,8 @@ function approve_registration(frm) {
 				label: __("Role"),
 				// Managers may only approve employees.
 				options: onload.is_admin ? ["Employee", "Manager", "Admin"].join("\n") : "Employee",
-				default: "Employee",
+				// A team manager in the employee record becomes Manager, everybody else Employee.
+				default: existing.role || "Employee",
 				reqd: 1,
 				description: __("Employee: own work only. Manager: own team. Admin: everything."),
 			},
@@ -54,8 +82,8 @@ function approve_registration(frm) {
 				fieldtype: "Link",
 				options: "MVM Employee",
 				label: __("Reports To (Manager)"),
-				// A team manager's own employee by default.
-				default: (frm.doc.__onload || {}).default_manager,
+				// The manager in the employee record; for a new employee a team manager's own employee.
+				default: existing.reporting_to || onload.default_manager,
 			},
 		],
 		// The approver pressed Approve.
@@ -97,6 +125,41 @@ function approve_registration(frm) {
 		// Label of its button.
 		__("Approve")
 	);
+	// The employee the dialog shows at the start.
+	dialog.shown_employee = onload.existing_employee || null;
+}
+
+// Put the manager, role and summary of an employee record into the approval dialog.
+function fill_from_employee(dialog, details, onload) {
+	// Nothing chosen means a new employee: back to the defaults.
+	details = details || {};
+	// The manager of the record, else a team manager's own employee.
+	dialog.set_value("reporting_to", details.reporting_to || onload.default_manager || "");
+	// Manager for someone with a team, else Employee.
+	dialog.set_value("role", details.role || "Employee");
+	// The summary under the employee field.
+	dialog.fields_dict.details.$wrapper.html(employee_summary(details));
+}
+
+// Short summary of an employee record: name, manager, location, mobile and zones.
+function employee_summary(details) {
+	// No existing employee: nothing to show.
+	if (!details || !details.employee) return "";
+	// Text safe to put into HTML.
+	const esc = frappe.utils.escape_html;
+	// Label and value pairs; empty values are left out.
+	const lines = [
+		[__("Employee"), `${details.employee_name || ""} (${details.employee})`],
+		[__("Reports To"), details.reporting_to ? `${details.reporting_to_name || ""} (${details.reporting_to})` : ""],
+		[__("Location"), details.location],
+		[__("Mobile"), details.mobile],
+		[__("Zones"), (details.zones || []).join(", ")],
+	].filter(([, value]) => value);
+	// A small grey block with one line per value.
+	return `<div class="text-muted small" style="margin-bottom: var(--margin-md)">
+		<div>${__("From the employee record:")}</div>
+		${lines.map(([label, value]) => `<div>${esc(label)}: <b>${esc(String(value))}</b></div>`).join("")}
+	</div>`;
 }
 
 // Reject: the login stays switched off.

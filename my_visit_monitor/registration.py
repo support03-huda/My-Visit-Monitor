@@ -1,9 +1,10 @@
 # File: registration.py
 # Purpose: Approval of self-registered logins: a login made through Sign Up waits for an administrator
 #          before it can be used. The set-password email is sent only after approval. Approval is needed
-#          only once, the first time.
+#          only once, the first time. Someone who is an employee already (same email) is recognised at
+#          sign up, so the approval is filled in from the employee record.
 # Created: 2026-10-10
-# Last updated: 2026-10-10
+# Last updated: 2026-10-12
 
 # Frappe framework.
 import frappe
@@ -51,6 +52,25 @@ def get_approvers():
 	]
 
 
+# The employee record with this email that has no login yet (or has `user` as its login); None when there is none.
+def find_employee_by_email(email, user=None):
+	# No email, nothing to match.
+	if not email:
+		# No match.
+		return None
+	# Employees with this email, ignoring capitals and spaces around it; active ones first.
+	matches = frappe.db.sql(
+		"""
+		select name from `tabMVM Employee`
+		where lower(trim(email)) = lower(trim(%s)) and (ifnull(user, '') = '' or user = %s)
+		order by inactive, name
+		""",
+		(email, user or ""),
+	)
+	# The first match, or None.
+	return matches[0][0] if matches else None
+
+
 # Hooks for MVM Registration: only people who may approve see the registrations.
 def registration_query_conditions(user=None, doctype=None):
 	# Approvers see all of them, everybody else none.
@@ -94,6 +114,8 @@ def on_user_insert(doc, method=None):
 			"full_name": doc.full_name or doc.first_name or doc.name,
 			"email": doc.email,
 			"status": "Pending",
+			# The employee record of this person, when the email is known from the employee master.
+			"employee": find_employee_by_email(doc.email, doc.name),
 		}
 	)
 	# A visitor has no permissions, so the check is skipped for this one record.

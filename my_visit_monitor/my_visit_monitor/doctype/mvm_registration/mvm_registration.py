@@ -4,8 +4,9 @@
 # Purpose: Registration of a self-registered login, approved or rejected once by an admin or a team manager.
 #          Approval links the existing employee with the same email (or creates one), sets the manager and the role
 #          (Employee, Manager or Admin); the person then gets the email to set their password.
+#          For an existing employee the dialog is filled in from the employee record (manager, role, zones).
 # Created: 2026-10-10
-# Last updated: 2026-10-10
+# Last updated: 2026-10-12
 
 # Frappe framework.
 import frappe
@@ -18,8 +19,8 @@ from frappe.utils import now_datetime
 
 # The approver's own employee, and whether they are an admin.
 from my_visit_monitor.permission import get_current_employee, is_manager
-# Who may approve.
-from my_visit_monitor.registration import is_approver
+# Who may approve, and the employee record of an email address.
+from my_visit_monitor.registration import find_employee_by_email, is_approver
 
 # Role every approved login gets: field staff ("user").
 APPROVED_ROLE = "MVM User"
@@ -42,25 +43,49 @@ class MVMRegistration(Document):
 		# Only admins may make someone a Manager or an Admin.
 		self.set_onload("is_admin", is_manager())
 		# The existing employee this login belongs to, found by email.
-		self.set_onload("existing_employee", self.find_existing_employee())
+		existing = self.find_existing_employee()
+		# Its code, for the dialog.
+		self.set_onload("existing_employee", existing)
+		# Its manager, role and zones, so the approval dialog is filled in already.
+		self.set_onload("existing_details", self.employee_details(existing) if existing else None)
 
 	# The employee record with the same email as the registration that has no other login yet.
 	def find_existing_employee(self):
-		# No email, nothing to match.
-		if not self.email:
-			# No match.
+		# Looked up in the employee master.
+		return find_employee_by_email(self.email, self.user)
+
+	# What the employee master knows about an employee: name, manager, zones, and the role that fits.
+	# The approval dialog shows it and uses it as the default.
+	@frappe.whitelist()
+	def employee_details(self, employee=None):
+		# Only people who may approve.
+		if not is_approver():
+			# Stop with a message.
+			frappe.throw(_("Only an administrator or a manager can approve or reject a registration."), frappe.PermissionError)
+		# Nothing chosen, or a code that does not exist.
+		if not employee or not frappe.db.exists("MVM Employee", employee):
+			# Nothing to show.
 			return None
-		# Employees with this email, ignoring capitals.
-		matches = frappe.db.sql(
-			"""
-			select name from `tabMVM Employee`
-			where lower(email) = lower(%s) and (ifnull(user, '') = '' or user = %s)
-			order by inactive, name
-			""",
-			(self.email, self.user),
-		)
-		# The first match, or None.
-		return matches[0][0] if matches else None
+		# The employee record.
+		record = frappe.get_doc("MVM Employee", employee)
+		# Somebody else reports to this employee: a team manager.
+		has_team = bool(frappe.db.exists("MVM Employee", {"reporting_to": employee, "name": ["!=", employee], "inactive": 0}))
+		# What the dialog needs.
+		return {
+			"employee": record.name,
+			"employee_name": record.employee_name,
+			"email": record.email,
+			"mobile": record.mobile,
+			"location": record.location,
+			"reporting_to": record.reporting_to,
+			# The manager's name, to show next to the code.
+			"reporting_to_name": frappe.db.get_value("MVM Employee", record.reporting_to, "employee_name") if record.reporting_to else None,
+			"zones": [row.zone for row in record.zones],
+			# Managers of a team become Manager; only an admin may give that, so a manager approving sees Employee.
+			"role": "Manager" if has_team and is_manager() else "Employee",
+			# The login it has already, if any.
+			"user": record.user,
+		}
 
 	# Only an admin or a team manager may decide, and only once.
 	def check_can_decide(self):
@@ -121,6 +146,12 @@ class MVMRegistration(Document):
 				frappe.throw(_("Employee {0} already belongs to login {1}.").format(employee, other))
 			# The chosen employee.
 			record = frappe.get_doc("MVM Employee", employee)
+			# The login shows the name of the employee master, not what was typed at sign up.
+			if record.employee_name and user.full_name != record.employee_name:
+				# The whole name goes into the first name.
+				user.first_name, user.middle_name, user.last_name = record.employee_name, None, None
+				# Managers may not edit users themselves; this one change is checked above.
+				user.save(ignore_permissions=True)
 			# Link it to this login.
 			record.user = self.user
 			# Employees from the old database miss fields that are mandatory today.
