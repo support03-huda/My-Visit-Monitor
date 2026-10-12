@@ -336,14 +336,20 @@ def report_html(period, rows, start, end, members):
 	# Visits outside the geofence.
 	total_outside = sum(row.outside for row in rows)
 
-	# Whose visits the report covers.
+	# Whose visits the report covers: the name goes into the heading, the note into the line under it.
 	if own:
-		# The employee.
-		scope = f"{rows[0].name} ({rows[0].code})" if rows else ""
-	# A manager's team, or everybody.
+		# The employee, with the code in the line below.
+		scope, note = (rows[0].name, rows[0].code) if rows else ("", "")
+	# Everybody.
+	elif members is None:
+		# All employees.
+		scope, note = _("All Employees"), ""
+	# A manager's team: the manager is the first member.
 	else:
-		# Team or all.
-		scope = _("All employees") if members is None else _("Your team")
+		# The manager's name.
+		manager = next((row.name for row in rows if row.code == members[0]), "")
+		# "Team of Shirish D Kulkarni"
+		scope, note = (_("Team of {0}").format(manager) if manager else _("Your Team")), ""
 
 	# Summary: one column per figure.
 	figures = [(_("Total Visits"), total_visits), (_("Customers Visited"), total_customers)]
@@ -458,9 +464,9 @@ def report_html(period, rows, start, end, members):
 	# The whole message.
 	return f"""
 	<div style="font-family:Inter,'Segoe UI',Arial,Helvetica,sans-serif;color:{TEXT};max-width:900px">
-		<div style="font-size:18px;font-weight:bold;margin:0 0 4px 0">{_("Weekly Visit Report")}</div>
+		<div style="font-size:22px;font-weight:bold;margin:0 0 6px 0">{_("Weekly Visit Report")} - {escape_html(scope)}</div>
 		<div style="font-size:13px;color:{MUTED};padding:0 0 12px 0;margin:0 0 16px 0;border-bottom:1px solid {LINE}">
-			{escape_html(period)} &middot; {escape_html(scope)} &middot; {_("{0} working days (Monday to Friday)").format(working_days)}
+			{escape_html(period)}{" &middot; " + escape_html(note) if note else ""} &middot; {_("{0} working days (Monday to Friday)").format(working_days)}
 		</div>
 		<p style="font-size:13px;margin:0 0 16px 0">{_("Please find below the visit report for the week {0}.").format(escape_html(period))}</p>
 		{summary}
