@@ -12,6 +12,7 @@
   "location",
   "reporting_to",
   "inactive",
+  "exclude_from_weekly_report",
   "section_zones",
   "zones",
   "section_address",
@@ -84,6 +85,14 @@
    "fieldtype": "Check",
    "in_standard_filter": 1,
    "label": "Inactive",
+   "permlevel": 1
+  },
+  {
+   "default": "0",
+   "description": "This employee is not listed in the weekly email report and gets no report of their own (for office and support accounts).",
+   "fieldname": "exclude_from_weekly_report",
+   "fieldtype": "Check",
+   "label": "Leave Out of Weekly Report",
    "permlevel": 1
   },
   {
@@ -168,7 +177,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-10 20:00:00.000000",
+ "modified": "2026-10-12 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Employee",

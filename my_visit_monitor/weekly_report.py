@@ -124,12 +124,13 @@ def recipients():
 			# Everybody's visits.
 			result[row.email.lower()] = None
 	# Active employees with their address: the login's email, else the email on the employee record.
+	# Employees ticked "Leave Out of Weekly Report" get no report of their own and are in nobody's team.
 	employees = frappe.db.sql(
 		"""
 		select employee.name, lower(trim(ifnull(nullif(login.email, ''), employee.email))) as email
 		from `tabMVM Employee` employee
 		left join `tabUser` login on login.name = employee.user and login.enabled = 1
-		where employee.inactive = 0
+		where employee.inactive = 0 and employee.exclude_from_weekly_report = 0
 		order by employee.name
 		""",
 		as_dict=True,
@@ -174,12 +175,20 @@ def send_report(email, start, end, members):
 
 # One dict per employee: name, manager, days worked and every visit of the week.
 def report_rows(start, end, members):
+	# Employees ticked "Leave Out of Weekly Report" (office and support accounts): never listed.
+	left_out = set(frappe.get_all("MVM Employee", filters={"exclude_from_weekly_report": 1}, pluck="name"))
 	# The employees in the report: the given ones, or every active employee.
 	codes = list(members) if members is not None else frappe.get_all("MVM Employee", filters={"inactive": 0}, pluck="name")
+	# Without the ones that are left out.
+	codes = [code for code in codes if code not in left_out]
 	# Values for the query; an empty group gets a code that cannot exist.
-	values = {"start": start, "end": end, "codes": tuple(codes or [""])}
+	values = {"start": start, "end": end, "codes": tuple(codes or [""]), "left_out": tuple(left_out or [""])}
 	# Everybody: no employee filter, so inactive employees who still have visits that week are listed too.
-	condition = "and ifnull(visit.employee, '') != ''" if members is None else "and visit.employee in %(codes)s"
+	condition = (
+		"and ifnull(visit.employee, '') != '' and visit.employee not in %(left_out)s"
+		if members is None
+		else "and visit.employee in %(codes)s"
+	)
 	# Every visit of the week, oldest first.
 	visits = frappe.db.sql(
 		f"""
