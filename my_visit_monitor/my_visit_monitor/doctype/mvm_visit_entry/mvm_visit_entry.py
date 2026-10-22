@@ -4,7 +4,7 @@
 # Purpose: Visit entry: check-in, check-out, the comparison with the customer location, and the manager
 #          action that makes a check-in position the customer location.
 # Created: 2026-10-05
-# Last updated: 2026-10-10
+# Last updated: 2026-10-22
 
 # Frappe framework.
 import frappe
@@ -21,6 +21,7 @@ from frappe.utils import add_days, cint, cstr, flt, nowtime, today
 from my_visit_monitor.permission import get_current_employee, get_employee_zones, is_manager
 # Settings, distance and address lookup.
 from my_visit_monitor.utils import (
+	MAX_ACCURACY_ALLOWANCE,
 	distance_in_metres,
 	geocode_address,
 	geofence_radius,
@@ -150,8 +151,8 @@ class MVMVisitEntry(Document):
 		# Field with Inside / Outside; the form colours the sentence green or red with it.
 		status_field = f"{event}_location_status"
 
-		# Allowed distance in metres (MVM Settings).
-		radius = geofence_radius()
+		# Allowed distance in metres (the customer's own, else MVM Settings).
+		radius = geofence_radius(self.customer)
 		# No sentence yet.
 		self.set(remark_field, None)
 		# No distance yet.
@@ -182,8 +183,10 @@ class MVMVisitEntry(Document):
 		distance = distance_in_metres(latitude, longitude, self.customer_latitude, self.customer_longitude)
 		# Keep the distance on the visit.
 		self.set(distance_field, distance)
+		# The phone may be off by its reported accuracy; give the employee that much, up to a limit.
+		allowance = min(flt(self.get(f"{event}_accuracy")), MAX_ACCURACY_ALLOWANCE)
 		# The employee is at the customer.
-		if distance <= radius:
+		if distance - allowance <= radius:
 			# Sentence for a position inside the radius.
 			self.set(remark_field, _("Within {0} m of the customer location").format(radius))
 			# Shown in green.

@@ -27,6 +27,7 @@
   "latitude",
   "column_break_location",
   "longitude",
+  "geofence_radius",
   "section_other",
   "magic_code",
   "column_break_other",
@@ -175,6 +176,14 @@
    "precision": "7"
   },
   {
+   "description": "For large premises (factory, campus): a check-in within this many metres counts as at the customer. 0 uses the Geofence Radius of MVM Settings.",
+   "fieldname": "geofence_radius",
+   "fieldtype": "Int",
+   "label": "Geofence Radius (m)",
+   "non_negative": 1,
+   "permlevel": 1
+  },
+  {
    "fieldname": "section_other",
    "fieldtype": "Section Break",
    "label": "Other"
@@ -197,7 +206,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-10 20:00:00.000000",
+ "modified": "2026-10-22 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Customer",

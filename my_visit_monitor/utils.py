@@ -1,7 +1,7 @@
 # File: utils.py
 # Purpose: Shared helpers: settings, master codes (A00001), distance and address lookup.
 # Created: 2026-10-05
-# Last updated: 2026-10-10
+# Last updated: 2026-10-22
 
 # Trigonometry for the distance.
 import math
@@ -19,6 +19,8 @@ from frappe.utils import cint, flt
 CODE_DIGITS = 5
 # Radius in metres used when none is stored in MVM Settings.
 DEFAULT_GEOFENCE_RADIUS = 200
+# Most metres of GPS inaccuracy given to the employee in the geofence check; a rougher position earns no more.
+MAX_ACCURACY_ALLOWANCE = 50
 
 
 # The MVM Settings record (cached).
@@ -36,12 +38,24 @@ def location_required():
 
 
 # Allowed distance between check-in and customer.
-def geofence_radius():
-	"""Metres from the customer's location within which a check-in counts as at the customer; 0 is off."""
+def geofence_radius(customer=None):
+	"""Metres from the customer's location within which a check-in counts as at the customer; 0 is off.
+
+	A customer with its own Geofence Radius (large premises) uses that; 0 on the customer means the radius of
+	MVM Settings. A radius of 0 in MVM Settings switches the comparison off for every customer.
+	"""
 	# Stored value of the Geofence Radius.
 	value = get_settings().geofence_radius
 	# Never saved means the default.
-	return DEFAULT_GEOFENCE_RADIUS if value is None else cint(value)
+	radius = DEFAULT_GEOFENCE_RADIUS if value is None else cint(value)
+	# The comparison is off, or no customer was given.
+	if not radius or not customer:
+		# The radius of MVM Settings.
+		return radius
+	# Radius set on the customer; 0 when none.
+	own = cint(frappe.db.get_value("MVM Customer", customer, "geofence_radius"))
+	# The customer's own radius when set, else the one of MVM Settings.
+	return own or radius
 
 
 # Letter a master code starts with.
