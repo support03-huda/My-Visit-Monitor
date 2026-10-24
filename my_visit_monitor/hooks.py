@@ -30,7 +30,8 @@ app_license = "mit"
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/my_visit_monitor/css/my_visit_monitor.css"
+# Desk styles: the notifications panel on phones.
+app_include_css = "/assets/my_visit_monitor/css/my_visit_monitor.css"
 # app_include_js = "/assets/my_visit_monitor/js/my_visit_monitor.js"
 
 # include js, css files in header of web template
