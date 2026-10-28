@@ -1,10 +1,10 @@
 # Copyright (c) 2026, huda and contributors
 # For license information, please see license.txt
 # File: mvm_visit_entry.py
-# Purpose: Visit entry: check-in, check-out, the comparison with the customer location, and the manager
-#          action that makes a check-in position the customer location.
+# Purpose: Visit entry: check-in, check-out, the comparison with the customer location, the follow-up ToDo of the
+#          Next Visit Date, and the manager action that makes a check-in position the customer location.
 # Created: 2026-10-05
-# Last updated: 2026-10-22
+# Last updated: 2026-10-28
 
 # Frappe framework.
 import frappe
@@ -17,6 +17,8 @@ from frappe.model.naming import getseries
 # Date, time and conversion helpers.
 from frappe.utils import add_days, cint, cstr, flt, nowtime, today
 
+# Follow-up ToDos of the Next Visit Date.
+from my_visit_monitor.followup import close_done_followups, sync_followup_todo
 # Who the logged-in employee is and which zones they cover.
 from my_visit_monitor.permission import get_current_employee, get_employee_zones, is_manager
 # Settings, distance and address lookup.
@@ -72,6 +74,14 @@ class MVMVisitEntry(Document):
 		self.compare_with_customer_location("checkin", self.checkin_latitude, self.checkin_longitude)
 		# Date of the next visit.
 		self.set_next_visit_date()
+
+	# After every save: the Next Visit Date becomes a ToDo of the employee, and this visit closes the open
+	# follow-up ToDos of the employee's earlier visits to the same customer.
+	def on_update(self):
+		# This visit is the follow-up of the earlier ones.
+		close_done_followups(self)
+		# ToDo for the next visit.
+		sync_followup_todo(self)
 
 	# The visit belongs to the employee of the logged-in user.
 	def set_employee(self):

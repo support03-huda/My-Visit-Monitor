@@ -11,7 +11,9 @@
   "google_maps_api_key",
   "section_weekly_report",
   "weekly_report_enabled",
-  "weekly_report_all_recipients"
+  "weekly_report_all_recipients",
+  "section_followup",
+  "followup_reminder_enabled"
  ],
  "fields": [
   {
@@ -64,11 +66,23 @@
    "fieldname": "weekly_report_all_recipients",
    "fieldtype": "Small Text",
    "label": "Send All Employees Report To"
+  },
+  {
+   "fieldname": "section_followup",
+   "fieldtype": "Section Break",
+   "label": "Follow-up Reminders"
+  },
+  {
+   "default": "0",
+   "description": "Every day at 8:00 email each employee the follow-up visits (Next Visit Date) due tomorrow. The follow-ups are in their ToDo list either way. Leave off on test sites.",
+   "fieldname": "followup_reminder_enabled",
+   "fieldtype": "Check",
+   "label": "Send Follow-up Reminders"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-12 09:00:00.000000",
+ "modified": "2026-10-28 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "My Visit Monitor",
  "name": "MVM Settings",

@@ -192,6 +192,8 @@ scheduler_events = {
 	"cron": {
 		# Every Monday at 9:00: last week's visit report to managers and admins (when switched on in MVM Settings).
 		"0 9 * * 1": ["my_visit_monitor.weekly_report.send_weekly_reports"],
+		# Every day at 8:00: email the follow-up visits due tomorrow (when switched on in MVM Settings).
+		"0 8 * * *": ["my_visit_monitor.followup.send_followup_reminders"],
 	},
 }
 
